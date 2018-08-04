@@ -1,0 +1,85 @@
+// comment
+
+
+// aaaaaaaaaaaa
+// language functionality
+// 
+// standard c operators
+// datatype is integer/pointer/whatever
+// declared with var/static
+// 
+//
+// function always returns something
+
+// function def:
+
+HiFunc(a, b, c) = {
+	return 0;
+}
+
+// constants:
+
+// null = 0
+// true = 1
+// false = 0
+
+// unsigned values
+
+// literals
+// "string literal" = pointer to data, modification needs copying, null terminated
+// 'char' = char literal, ascii value
+// 0-max = unsigned literal
+// -max - 0 = signed literal or (0-max)s
+
+// *deref
+// &addressof
+
+// importing:
+
+import thing;
+
+// includes another lib. copies their code into ours, as long as functions have different names
+
+// external definitions:
+
+extern printf(fmt, ...)
+// args are assumed to just be simple datatypes, if not well then you are screwed!
+// also ... means varargs
+// you can't pass "vector stuff"
+
+// its a pretty simple language, ok???
+
+// lots of extern crap is defined in stdlib;
+// extern args need link params -lwhatever
+// we use the gnu linker + assembler
+
+// search path: current dir, stdlib
+
+// globals also exist, static in global space
+
+static a = 1;
+
+SayHiAndOne() = {
+   printf("hi%d", a);
+   return 0;
+}
+
+// main function is always called main with argc + argv
+
+main(argc, argv) {
+   SayHiAndOne();
+   return 0;
+}
+
+// passing by ref is only done with pointers, copies otherwise
+
+// ++i = value of i before increment
+// i++ value of i after increment
+
+strlen(s) = {
+   var l = 0;
+   while (*(++i) != 0) l++;
+   return l;
+}
+
+
