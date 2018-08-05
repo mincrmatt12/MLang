@@ -64,7 +64,9 @@ struct expression {
 	expression(long v)		: t(ex_type::literal_number), numvalue(v) {}
 	expression(char c)		: t(ex_type::literal_number), numvalue(static_cast<long>(c)) {}
 
-	bool has_side_effects() const;
+	bool has_side_effects() const;		// simple version, used for very basic checks during parsing
+	// complex version, implemented in the ast optimizer and used during optimization checking
+	bool is_compiletime_expr() const;
 	expression operator%=(expression &&b) && { return expression(ex_type::assign, std::move(b), std::move(*this)); }
 };
 
@@ -72,6 +74,13 @@ struct expression {
 template<typename... T> \
 inline expression e_##n(T&&... args) { \
 	return expression(ex_type::n, std::forward<T>(args)...); \
+}
+ENUM_EXPRESSIONS(o)
+#undef o
+
+#define o(n) \
+inline bool is_##n(const expression& e) {\
+	return e.t == ex_type::n; \
 }
 ENUM_EXPRESSIONS(o)
 #undef o
@@ -99,7 +108,7 @@ struct var_decl_shim {
 
 
 %param {parsecontext &ctx } //param (allows it to take in extra parameters in the expansions)
-%code 
+%code provides
 {
 
 struct parsecontext
@@ -163,6 +172,7 @@ public:
 	}
 
 	void add_function(std::string &&name, expression&& code) {
+		//if (code.t == ex_type::ret || (code.t == ex_type.comma && code.params))
 		current_fun.code = e_comma(std::move(code), e_ret(0l)); // make sure the function always returns a 0
 		current_fun.name = std::move(name);
 		func_list.push_back(std::move(current_fun));
@@ -177,7 +187,9 @@ public:
 
 	void operator++() {scopes.emplace_back();}
 	void operator--() {scopes.pop_back();}
-};
+};}
+%code
+{
 
 namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 
@@ -216,7 +228,7 @@ defs: defs function
     | %empty;
 
 function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;};
-extern_function: IDENTIFIER '(' paramdecls ')';
+extern_function: IDENTIFIER {ctx.defexternal($1);}'(' paramdecls ')' {ctx.add_ext_function(M($1));};
 
 paramdecls: paramdecl
 	  | paramdecl ',' ELLIPSIS {ctx.defvarargs();}
@@ -385,4 +397,18 @@ bool expression::has_side_effects() const {
 	}
 }
 
+bool expression::is_compiletime_expr() const {
+	for (const auto &e : this->params) if (!e.is_compiletime_expr()) return false;
 
+	switch (t) {
+		case ex_type::string_ref:	case ex_type::literal_number:
+		case ex_type::add:		case ex_type::neg: 	case ex_type::mul:
+		case ex_type::div:		case ex_type::l_or:	case ex_type::l_and:
+		case ex_type::nop:		case ex_type::comma:
+			return true;
+		case ex_type::ident:
+			return ident.type == id_type::function;
+		default:
+			return false;
+	}
+}

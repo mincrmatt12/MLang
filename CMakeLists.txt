@@ -4,6 +4,10 @@ project(mlang)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake CACHE INTERNAL "" FORCE)
 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_compile_options(-g)
+endif()
+
 find_package(RE2C REQUIRED)
 find_package(BISON REQUIRED)
 
@@ -13,5 +17,6 @@ BISON_TARGET(mlang_yacc ${CMAKE_CURRENT_BINARY_DIR}/parser.y.re ${CMAKE_CURRENT_
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(mcc src/main.cpp ${BISON_mlang_yacc_OUTPUTS})
+message(STATUS ${BISON_mlang_yacc_OUTPUTS})
+add_executable(mcc src/main.cpp src/ast_optimize.cpp ${BISON_mlang_yacc_OUTPUTS})
 

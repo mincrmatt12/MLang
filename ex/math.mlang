@@ -1,0 +1,8 @@
+// tests some math
+
+main(argc, argv) = {
+	var add_sub = 1 + 2 - 3;
+	add_sub *= 2;
+	var other = 5 * 2;
+	other = other % 4;
+}

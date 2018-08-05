@@ -36,13 +36,13 @@ HiFunc(a, b, c) = {
 
 // importing:
 
-import thing;
+//import thing;
 
 // includes another lib. copies their code into ours, as long as functions have different names
 
 // external definitions:
 
-extern printf(fmt, ...)
+extern printf(fmt, ...);
 // args are assumed to just be simple datatypes, if not well then you are screwed!
 // also ... means varargs
 // you can't pass "vector stuff"
@@ -66,7 +66,7 @@ SayHiAndOne() = {
 
 // main function is always called main with argc + argv
 
-main(argc, argv) {
+main(argc, argv) = {
    SayHiAndOne();
    return 0;
 }
@@ -78,8 +78,15 @@ main(argc, argv) {
 
 strlen(s) = {
    var l = 0;
-   while (*(++i) != 0) l++;
+   while (*(++s) != 0) l++;
    return l;
 }
 
+testf(a) = {
+	static v = 2;
+	return &v;
+}
 
+testg() = {
+	return *testf() % (*testf() + 2);
+}
