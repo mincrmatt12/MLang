@@ -1,3 +1,4 @@
+#include <numeric>
 #include "stringify.h"
 #include "transform_iterator.h"
 
@@ -75,7 +76,7 @@ bool astoptimizecontext::is_pure(const expression &e) {
 
 int astoptimizecontext::optimize_flatten(expression &e) {
 	int modifications = 0;
-	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e)) {
+	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e) || is_div(e)) {
 		// Adopt children of the same type as e
 		expr_vec new_args{};
 		for (auto &d : e.params) {
@@ -104,11 +105,11 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 	}
 
 	switch (e.params.size()) {
-		case 1: if(is_add(e) || is_mul(e) || is_comma(e)) e = expression(std::move(e.params.front())),         ++modifications;
-			else if (is_l_or(e) || is_l_and(e))       e = e_eq(e_eq(std::move(e.params.front()), 0l), 0l), ++modifications;
+		case 1: if(is_add(e) || is_mul(e) || is_comma(e) || is_div(e)) {e = expression(std::move(e.params.front()));         ++modifications;}
+			else if (is_l_or(e) || is_l_and(e))                    {e = e_eq(e_eq(std::move(e.params.front()), 0l), 0l); ++modifications;}
 			break;
-		case 0: if (is_add(e) || is_mul(e) || is_l_or(e)) e = 0l,                                              ++modifications;
-			else if (is_l_and(e))                     e = 1l,                                              ++modifications;
+		case 0: if (is_add(e) || is_mul(e) || is_l_or(e) || is_div(e)) {e = 0l;                                              ++modifications;}
+			else if (is_l_and(e))                                  {e = 1l;                                              ++modifications;}
 	}
 	return modifications;
 }
@@ -122,5 +123,70 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 	modifications += std::count_if(e.params.begin(), e.params.end(), is_nop);
 	e.params.remove_if(is_nop);
 
+	// Remove anything after a return statement or infinite loop, if any.
+	if (auto loc = std::find_if(e.params.begin(), e.params.end(), [&](expression &p){ return is_ret(p) || (is_loop(p) && is_literal_number(p.params.front()) && p.params.front().numvalue == 1);}); loc != e.params.end()) {
+		size_t length = std::distance(e.params.begin(), loc) + 1;
+		if (length != e.params.size()) {
+			e.params.resize(length);
+			++modifications;
+		}
+	}
+
+	return modifications;
+}
+
+int astoptimizecontext::optimize_constfold(expression &e) {
+	int modifications = 0;
+	// Constant folding for neg:
+	// |- neg
+	// | |- literal_number 2
+	//
+	// becomes
+	//
+	// |- literal_number -2
+	
+	if (is_neg(e)) {
+		if (is_literal_number(e.params.front())) {
+			++modifications;
+			e = -e.params.front().numvalue;
+		}
+	}
+
+	// Constant folding on mathematic types 
+	//
+	// |- add
+	// | |- literal_number 1
+	// | |- literal_number 2
+	//
+	// becomes
+	//
+	// |- add
+	// | |- literal_number 3
+	//
+	// which is then optimized further by the tree flatenner
+	if (is_add(e) || is_mul(e)) {
+		// Make sure there are at least two numerical arguments to avoid pessimization
+		if (std::count_if(e.params.begin(), e.params.end(), is_literal_number) >= 2) {
+			// Extract all of the constants into another type
+			std::vector<long> constants{};
+			e.params.remove_if([&](expression &e){
+				if (is_literal_number(e)) constants.emplace_back(e.numvalue); // copy out of the list
+				return is_literal_number(e);
+			});
+			// Aggregate the values together using std::accumulate
+			long aggregate;
+			switch (e.t) {
+				case ex_type::add: aggregate = std::accumulate(constants.begin(), constants.end(), 0)                          ; break ;
+				case ex_type::mul: aggregate = std::accumulate(constants.begin(), constants.end(), 1, std::multiplies<long>()) ; break ;
+				default: break                                                                                                 ;
+			}
+
+			// Add the number constant back into the expression
+			e.params.emplace_back(aggregate);
+
+			// Count the modification
+			++modifications;
+		}
+	}
 	return modifications;
 }
