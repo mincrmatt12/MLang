@@ -42,23 +42,24 @@ struct astoptimizecontext {
 		while (std::any_of(begin, end, [&](expression &e){return for_all_expr(e, true, [&](auto &ee){
 			return optimize_flatten(ee)         || optimize_deadcode(ee)          || 
 			       optimize_arith_constfold(ee) || optimize_pointer_simplify(ee);
-		});})) {};
+		});})) {find_pure_funcs();};
 		// some techniques depend on other ones to have finished. run them now
 		while (std::any_of(begin, end, [&](expression &e){return for_all_expr(e, true, [&](auto &ee){
-			return optimize_flatten(ee)         || optimize_deadcode(ee)          || 
-			       optimize_arith_constfold(ee) || optimize_pointer_simplify(ee)  ||
-			       optimize_logicalfold(ee);
-		});})) {};
+			return optimize_flatten(ee)         || optimize_deadcode(ee)         ||
+			       optimize_arith_constfold(ee) || optimize_pointer_simplify(ee) ||
+			       optimize_logicalfold(ee)     || optimize_simplify(ee);
+		});})) {find_pure_funcs();};
 	}
 
 	// optimization techniques
 
 	// returns int = number of changes made
-	int optimize_flatten          (expression &e);
-	int optimize_deadcode         (expression &e);
-	int optimize_arith_constfold  (expression &e);
-	int optimize_pointer_simplify (expression &e);
-	int optimize_logicalfold      (expression &e);
+	int optimize_flatten                    (expression &e);
+	int optimize_deadcode                   (expression &e);
+	int optimize_arith_constfold            (expression &e);
+	int optimize_pointer_simplify           (expression &e);
+	int optimize_logicalfold                (expression &e);
+	int optimize_simplify                   (expression &e);
 };
 
 #endif

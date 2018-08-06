@@ -11,6 +11,12 @@
 #include <parser.h>
 #include "ast_optimize.h"
 
+struct tree_toggle_t {
+	bool yes;
+	tree_toggle_t * first;
+	tree_toggle_t * next = nullptr;
+};
+
 template<typename T>
 static void val_print(const T &v) {};
 
@@ -33,9 +39,22 @@ void val_print(const identifier &v) {
 	std::cout << v.index << "\t(" << v.name << ")";
 }
 
-static void print_tree(const expression &e, int depth=0) {
-	for (int i = 0; i < depth; i++) {
-		std::cout << "| ";
+static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nullptr) {
+	if (head == nullptr) {
+		head = new tree_toggle_t;
+		head->first = head;
+	}
+	else {
+		tree_toggle_t * last = head;
+		head = new tree_toggle_t;
+		last->next = head;
+		head->first = last->first;
+		tree_toggle_t * starting = head->first;
+		std::cout << "  ";
+		for (int i = 0; i < depth-1; i++) {
+			std::cout << (starting->yes ? "| " : "  ");
+			starting = starting->next;
+		}
 	}
 	std::cout << "|- ";
 #define o(n) case ex_type::n: std::cout << #n; break;
@@ -52,9 +71,13 @@ static void print_tree(const expression &e, int depth=0) {
 	}
 	std::cout << std::endl;
 	++depth;
+	int car = e.params.size();
 	for (const auto &l : e.params) {
-		print_tree(l, depth);
+		--car;
+		head->yes = car != 0;
+		print_tree(l, depth, head);
 	}
+	delete head;
 }
 
 static void debug_dump_ctx(parsecontext& ctx) {

@@ -117,6 +117,7 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 int astoptimizecontext::optimize_deadcode(expression &e) {
 	int modifications = 0;
 	if (!(is_loop(e) || is_comma(e))) return 0;
+	if (is_loop(e) && is_literal_number(e.params.front()) && e.params.front().numvalue == 0) {e = e_nop(); std::cout << "erased pointless loop" << std::endl; return 1;}
 
 	// Remove any expression with no side effects except for the last one
 	// Additionally, take things that aren't pure but that don't contribute to anything and place the non-pure operands
@@ -309,6 +310,12 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	// | |- ...
 	//
 	// for any number
+	
+	// If there are more neg parameters in an add then non-neg invert everything
+	if (is_add(e) && std::count_if(e.params.begin(), e.params.end(), is_neg) > long(e.params.size()/2)) {
+		for (auto &p : e.params) p = e_neg(std::move(p));
+		e = e_neg(std::move(e));
+	}
 	return modifications;
 }
 
@@ -398,5 +405,38 @@ int astoptimizecontext::optimize_logicalfold(expression &e) {
 		}
 	}
 
+	return modifications;
+}
+
+int astoptimizecontext::optimize_simplify(expression &e) {
+	// Due to my design, many optimizations are not possible due to me not being able to create temporaries due to the context-less approach used 
+	// when simplifying expressions. This may change at a later date but for now I will only add optimizations that can be executed without temporaries,
+	// usually meaning we cannot optimize unpure values. :(
+	int modifications = 0;
+	switch (e.t) {
+		case ex_type::eq:
+			// Check if both values are equal
+			++modifications;
+			if (is_literal_number(e.params.front()) && is_literal_number(e.params.back()))
+				e = static_cast<long>(e.params.front().numvalue == e.params.back().numvalue);
+			else if (e.params.front() == e.params.back() && is_pure(e.params.front()))
+				e = 1l;
+			// If values are not equal and they are both pure and are compile time expressions, we can set the result to 0
+			else if (!(e.params.front() == e.params.back()) && is_pure(e.params.front()) && is_pure(e.params.back()) && e.params.front().is_compiletime_expr() && e.params.back().is_compiletime_expr())
+				e = 0l;
+			else --modifications;
+			break;
+		case ex_type::assign:
+			// Check if we are doing
+			// a = a
+			// and a is pure
+			if (e.params.back() == e.params.front() && is_pure(e.params.back())) {
+				e = expression(std::move(e.params.back()));
+				++modifications;
+			}
+			break;
+		default:
+			break;
+	}
 	return modifications;
 }
