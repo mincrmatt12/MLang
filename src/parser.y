@@ -64,10 +64,17 @@ struct expression {
 	expression(long v)		: t(ex_type::literal_number), numvalue(v) {}
 	expression(char c)		: t(ex_type::literal_number), numvalue(static_cast<long>(c)) {}
 
-	bool has_side_effects() const;		// simple version, used for very basic checks during parsing
+	bool has_side_effects(bool typeonly=false) const;		// simple version, used for very basic checks during parsing
 	// complex version, implemented in the ast optimizer and used during optimization checking
 	bool is_compiletime_expr() const;
 	expression operator%=(expression &&b) && { return expression(ex_type::assign, std::move(b), std::move(*this)); }
+	bool operator==(const expression &e) const {
+		return (e.t == t) 
+			&& (t != ex_type::ident || (ident.type == e.ident.type && ident.index == e.ident.index))
+			&& (t != ex_type::string_ref || strvalue == e.strvalue)
+			&& (t != ex_type::literal_number || numvalue == e.numvalue)
+			&& params == e.params;
+	}
 };
 
 #define o(n) \
@@ -272,9 +279,9 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '+' expr			{ $$ = e_add(M($1), M($3));}
     | expr '-' expr			{ $$ = e_add(M($1), e_neg(M($3)));}
     | expr '*' expr       %prec '/'	{ $$ = e_mul(M($1), M($3));}
-    | expr '%' expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
+    | expr '%' expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}	
-					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(M($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
+					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(C($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
 					}
     | expr '/' expr			{ $$ = e_div(M($1), M($3));}
     | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
@@ -298,9 +305,9 @@ expr: STR_CONST				{ $$ = M($1);}
     | "--" expr           %prec "++"	{ if ($2.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), -1l)) %= e_deref(a.params.back());}
     					  else {$$ = C($2) %= e_add(M($2), -1l); }}
     | expr "++"				{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= 1l, M(t)); }
+    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), 1l), M(t)); }
     | expr "--"           %prec "++"	{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= 1l, M(t)); }
+    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), e_neg(1l)), M(t)); }
     | expr '?' expr ':' expr		{ auto t = ctx.temp(); $$ = e_comma(e_l_or(e_l_and(M($1), e_comma(C(t) %= M($3), 1l)), C(t) %= M($5)), C(t));};
 %%
 
@@ -378,9 +385,9 @@ void yy::mlang_parser::error(const location_type &l, const std::string &m) {
 
 // has_side_effects: does evaluating this expression write or modify anything?
 
-bool expression::has_side_effects() const {
+bool expression::has_side_effects(bool typeonly) const {
 	// if any parameter has side effects, then the expression is bad
-	for (const auto &e : this->params) if (e.has_side_effects()) return true;
+	for (const auto &e : this->params) if (e.has_side_effects() && !typeonly) return true;
 
 	switch (t) {
 		// assigns write; has side effect

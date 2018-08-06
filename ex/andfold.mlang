@@ -1,0 +1,9 @@
+// test andfolding
+
+other(a, b, c) = {
+	return a || *b = 2 || (0 + 1) || c;
+}
+
+main(a, b, c) = {
+	return a && (*b = 2) && a && other(a, b, c) && 0 && c;
+}

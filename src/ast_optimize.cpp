@@ -65,13 +65,13 @@ void astoptimizecontext::optimize() {
 	this->optimize_iterator(make_transform_iterator(this->global_inits.begin(), this->global_inits.end(), [&](auto &e) -> auto& {return e.second;}), transform_iterator<expression &>());
 }	
 
-bool astoptimizecontext::is_pure(const expression &e) {
-	if (is_fcall(e)) {
+bool astoptimizecontext::is_pure(const expression &e, bool typeonly) {
+	if (is_fcall(e) && !typeonly) {
 		if (!e.is_compiletime_expr()) return false;
 		if (purity.count(e.ident.name) == 0) return false;
 		return purity[e.ident.name];
 	}
-	return !e.has_side_effects();
+	return !e.has_side_effects(typeonly);
 }
 
 int astoptimizecontext::optimize_flatten(expression &e) {
@@ -116,18 +116,71 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 
 int astoptimizecontext::optimize_deadcode(expression &e) {
 	int modifications = 0;
-	if (!is_comma(e)) {
-		return 0;	
+	if (!(is_loop(e) || is_comma(e))) return 0;
+
+	// Remove any expression with no side effects except for the last one
+	// Additionally, take things that aren't pure but that don't contribute to anything and place the non-pure operands
+	// directly into the comma operator:
+	//
+	// |- comma
+	// | |- add
+	// | | |- literal_number 2
+	// | | |  fcall 
+	// | | |  |- ident	(non_pure)
+	//
+	// becomes
+	//
+	// |- comma
+	// | |- fcall
+	// | | |- ident	(non_pure)
+	for (auto i = e.params.begin(); i != e.params.end(); ) {
+		if (is_loop(e)) {
+			if (i == e.params.begin()) {++i; continue;} // Skip condition in loop processing
+		}	
+		else {
+			if (std::next(i) == e.params.end()) {break;} // Skip returned expression in comma
+		}
+
+		// First, check if the expression has no side effects. If so, erase it from the list
+		if (is_pure(*i)) {
+			// In this case, we can just ELIMINATE IT
+			// FATALITY
+			std::cout << "removed pure expression from comma or loop" << std::endl;
+			i = e.params.erase(i);
+		}
+		else {
+			// Otherwise, check if the expression type on its own has side effects
+			if (!is_pure(*i, true)) {
+				++i;  // The expression can stay	
+			}
+			else {
+				// Otherwise, we may be able to just move the arguments out as long as the expression does not short circuit. Check that now:
+				switch (i->t) {
+					default:
+						++i;
+						break;
+					case ex_type::add:
+					case ex_type::neg:
+					case ex_type::eq:
+					case ex_type::mul:
+					case ex_type::div:
+					case ex_type::addr:
+					case ex_type::deref:
+					case ex_type::comma:
+						auto tmp(std::move(i->params));
+						std::cout << "adopted parameters from sub-expr" << std::endl;
+						e.params.splice(i = e.params.erase(i), std::move(tmp));
+				}
+			}
+		}
 	}
-	// Remove all nops from the comma operator, as they do absolutely nothing
-	modifications += std::count_if(e.params.begin(), e.params.end(), is_nop);
-	e.params.remove_if(is_nop);
 
 	// Remove anything after a return statement or infinite loop, if any.
 	if (auto loc = std::find_if(e.params.begin(), e.params.end(), [&](expression &p){ return is_ret(p) || (is_loop(p) && is_literal_number(p.params.front()) && p.params.front().numvalue == 1);}); loc != e.params.end()) {
 		size_t length = std::distance(e.params.begin(), loc) + 1;
 		if (length != e.params.size()) {
 			e.params.resize(length);
+			std::cout << "removed inaccessible code" << std::endl;
 			++modifications;
 		}
 	}
@@ -135,7 +188,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 	return modifications;
 }
 
-int astoptimizecontext::optimize_constfold(expression &e) {
+int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	int modifications = 0;
 	// Constant folding for neg:
 	// |- neg
@@ -148,7 +201,13 @@ int astoptimizecontext::optimize_constfold(expression &e) {
 	if (is_neg(e)) {
 		if (is_literal_number(e.params.front())) {
 			++modifications;
+			std::cout << "folded neg" << std::endl;
 			e = -e.params.front().numvalue;
+		}
+		else if (is_neg(e.params.front())) {
+			++modifications;
+			std::cout << "removed extraneous neg" << std::endl;
+			e = expression(std::move(e.params.front().params.front()));
 		}
 	}
 
@@ -164,20 +223,23 @@ int astoptimizecontext::optimize_constfold(expression &e) {
 	// | |- literal_number 3
 	//
 	// which is then optimized further by the tree flatenner
-	if (is_add(e) || is_mul(e)) {
+	if (is_add(e) || is_mul(e) || (
+		is_div(e) && std::all_of(e.params.begin(), e.params.end(), is_literal_number)				
+	)) {
 		// Make sure there are at least two numerical arguments to avoid pessimization
 		if (std::count_if(e.params.begin(), e.params.end(), is_literal_number) >= 2) {
 			// Extract all of the constants into another type
 			std::vector<long> constants{};
-			e.params.remove_if([&](expression &e){
-				if (is_literal_number(e)) constants.emplace_back(e.numvalue); // copy out of the list
-				return is_literal_number(e);
+			e.params.remove_if([&](expression &h){
+				if (is_literal_number(h)) constants.emplace_back(h.numvalue); // copy out of the list
+				return is_literal_number(h);
 			});
 			// Aggregate the values together using std::accumulate
 			long aggregate;
 			switch (e.t) {
 				case ex_type::add: aggregate = std::accumulate(constants.begin(), constants.end(), 0)                          ; break ;
 				case ex_type::mul: aggregate = std::accumulate(constants.begin(), constants.end(), 1, std::multiplies<long>()) ; break ;
+				case ex_type::div: aggregate = std::accumulate(++constants.begin(), constants.end(), *(constants.begin()), std::divides<long>()) ; break ;
 				default: break                                                                                                 ;
 			}
 
@@ -186,7 +248,155 @@ int astoptimizecontext::optimize_constfold(expression &e) {
 
 			// Count the modification
 			++modifications;
+			std::cout << "folded " << constants.size() << " constants into one." << std::endl;
 		}
 	}
+	// Remove 0's from adds
+	if (is_add(e)) {
+		e.params.remove_if([&](expression &h){
+				if (is_literal_number(h) && h.numvalue == 0) {
+					std::cout << "removed 0 from add" << std::endl;
+					++modifications;
+					return true;
+				}
+				return false;
+		});
+	}
+	// Remove 1's from multiplies and divides
+	// UNLESS the 1 is in the first place and the type is div
+	if (is_mul(e) || is_div(e)) {
+		int i = 0;
+		e.params.remove_if([&](expression &h){
+				++i;
+				if (is_literal_number(h) && h.numvalue == 1 && (e.t == ex_type::div && i != 1)) {
+					std::cout << "removed 1 from mul/div" << std::endl;
+					++modifications;
+					return true;
+				}
+				return false;
+		});
+	}
+	// Change multiply and divide with zeros in them
+	// e.g
+	//
+	// |- mul
+	// | |- ...
+	// | |- literal_number 0
+	//
+	// to 
+	//
+	// |- literal_number 0
+	//
+	// For divide, only check if the first parameter is a zero.
+	//
+	if ((is_mul(e) && std::any_of(e.params.begin(), e.params.end(), [&](expression &d){return is_literal_number(d) && d.numvalue == 0;})) || 
+	    (is_div(e) && e.params.size() >= 1 && is_literal_number(e.params.front()) && e.params.front().numvalue == 0)) {
+		++modifications;
+		e = 0l;
+	}
+
+	// TODO:
+	//
+	// |- div
+	// | |- literal_number 1
+	// | |- literal_number 1
+	// | |- ...
+	//
+	// to
+	//
+	// |- div
+	// | |- literal_number 1
+	// | |- ...
+	//
+	// for any number
+	return modifications;
+}
+
+int astoptimizecontext::optimize_pointer_simplify(expression &e) {
+	int modifications = 0;
+	// Simplify expressions of the form
+	//
+	// *&(s)
+	// &*(s)
+	//
+	// to just s
+	if (is_addr(e)) {
+		if (is_deref(e.params.front())) {
+			++modifications;
+			std::cout << "simplified &*" << std::endl;
+			e = expression(std::move(e.params.front().params.front()));	
+		}	
+	}
+	if (is_deref(e)) {
+		if (is_addr(e.params.front())) {
+			++modifications;
+			std::cout << "simplified *&" << std::endl;
+			e = expression(std::move(e.params.front().params.front()));	
+		}	
+	}
+	return modifications;
+}
+
+int astoptimizecontext::optimize_logicalfold(expression &e) {
+	int modifications = 0;
+	if (!(is_l_or(e) || is_l_and(e))) return 0;
+
+	auto magic_val = is_l_or(e) ? [](long &v){return v != 0;} : [](long &v){return v == 0;};
+	// Consider this expression:
+	//
+	// b && a && c && 0 && e
+	// where b, e and c has no side effects and a does.
+	// 
+	// This could be simplified to
+	// (b && a, 0)
+	// since c can be removed without any effect, e will never be executed and b determines if a is executed so it must be kept
+	//
+	// Essentially, we must find the first pure value from a reverse iterator starting at the first 0 and copy the range given by it and the beginning
+	// to a new expression inside of a comma expr with 0.
+	if (auto t = std::find_if(e.params.begin(), e.params.end(), [&](expression &p){
+		return is_literal_number(p) && magic_val(p.numvalue);	
+	}); t != e.params.end()) {
+		++modifications;
+		std::cout << "folding logical: ";
+		// OK! t is now an iterator pointing directly at the 0. We now need to find if there are any non-pure expressions before here		
+		if (t == e.params.begin()) {
+			good:
+				std::cout << "using simple fixer" << std::endl;
+				e = is_l_or(e) ? 1l : 0l;
+		}
+		else {
+			auto res = std::find_if(std::make_reverse_iterator(std::prev(t)), std::make_reverse_iterator(e.params.begin()), [&](auto &h){return is_pure(h);});
+			if (res == std::make_reverse_iterator(e.params.begin())) goto good;
+			// Alright, res is now a reverse iterator that we can convert to a normal pointer.
+			auto r_end = res.base();
+			auto n_e = e_l_and();
+			n_e.params.splice(n_e.params.begin(), e.params, e.params.begin(), std::next(r_end));
+			std::cout << "using complex fixer" << std::endl;
+			e = e_comma(std::move(n_e), is_l_or(e) ? 1l : 0l);
+		}
+	}
+
+	// Consider this expression:
+	//
+	// a && a
+	// or
+	// a || a
+	//
+	// These can be simplified to just a or b.
+	// The flattenner will pick these up, so simply remove any identical expressions that are pure
+	if ((is_l_or(e) || is_l_and(e))) {
+		// Make sure we haven't changed out the things
+		for (auto i = std::next(e.params.begin()); i != e.params.end();) {
+			if (is_pure(*i) && std::find(e.params.begin(), i, *i) != i) {
+				std::cout << "removing duplicate in log" << std::endl;
+				++modifications;
+				i = e.params.erase(i);
+			}	
+			else {
+				++i;
+			}
+		}
+	}
+
 	return modifications;
 }
