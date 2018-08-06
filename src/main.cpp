@@ -28,5 +28,9 @@ int main(int argc, char ** argv) {
 	astoptimizecontext ast_octx(std::move(ctx));
 	ast_octx.optimize();
 
+#ifndef NDEBUG
+	debug_dump_ctx(ast_octx);
+#endif
+
 	return 0;
 }

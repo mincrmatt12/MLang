@@ -35,6 +35,19 @@ struct astoptimizecontext {
 	void find_pure_funcs();
 
 	void optimize();
+
+	template<typename Iterator>
+	void optimize_iterator(Iterator begin, Iterator end) {
+		while (std::any_of(begin, end, [&](expression &e){return for_all_expr(e, true, [&](auto &ee){
+			return optimize_flatten(ee) || optimize_deadcode(ee);
+		});})) {};
+	}
+
+	// optimization techniques
+	
+	// returns int = number of changes made
+	int optimize_flatten(expression &e);
+	int optimize_deadcode(expression &e);
 };
 
 #endif

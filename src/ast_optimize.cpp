@@ -1,4 +1,5 @@
-#include "ast_optimize.h"
+#include "stringify.h"
+#include "transform_iterator.h"
 
 void astoptimizecontext::find_pure_funcs() {
 	purity.clear(); // reset pure functions
@@ -55,6 +56,71 @@ void astoptimizecontext::find_pure_funcs() {
 }
 
 void astoptimizecontext::optimize() {
-	// todo
 	this->find_pure_funcs();
+	this->optimize_iterator(make_transform_iterator(this->functions.begin(), this->functions.end(), [&](function &e) -> auto& {return e.code;}), transform_iterator<expression &>());
+	for (auto &e : functions) {
+		this->optimize_iterator(e.global_initializers.begin(), e.global_initializers.end());
+	}
+	this->optimize_iterator(make_transform_iterator(this->global_inits.begin(), this->global_inits.end(), [&](auto &e) -> auto& {return e.second;}), transform_iterator<expression &>());
+}	
+
+bool astoptimizecontext::is_pure(const expression &e) {
+	if (is_fcall(e)) {
+		if (!e.is_compiletime_expr()) return false;
+		if (purity.count(e.ident.name) == 0) return false;
+		return purity[e.ident.name];
+	}
+	return !e.has_side_effects();
+}
+
+int astoptimizecontext::optimize_flatten(expression &e) {
+	int modifications = 0;
+	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e)) {
+		// Adopt children of the same type as e
+		expr_vec new_args{};
+		for (auto &d : e.params) {
+			if (d.t != e.t){new_args.emplace_back(std::move(d)); continue;}
+			++modifications;
+			// Adopt this expression
+			new_args.splice(new_args.end(), d.params);
+			std::cout << "flattened one expression in tree" << std::endl;
+		}
+	        e.params = std::move(new_args);
+	}
+	if (is_add(e)) {
+		expr_vec new_args{};
+		for (auto &d : e.params) {
+			if (is_neg(d) && is_add(d.params.front())) {
+				++modifications;
+				// For each add in the neg, synthesize a new neg with the parameter in it.
+				for (auto &param : d.params.front().params) {
+					new_args.emplace_back(std::move(e_neg(std::move(param))));
+				}
+				std::cout << "simplified 1 neg expr" << std::endl;
+			}
+			else new_args.emplace_back(std::move(d));
+		}
+	        e.params = std::move(new_args);
+	}
+
+	switch (e.params.size()) {
+		case 1: if(is_add(e) || is_mul(e) || is_comma(e)) e = expression(std::move(e.params.front())),         ++modifications;
+			else if (is_l_or(e) || is_l_and(e))       e = e_eq(e_eq(std::move(e.params.front()), 0l), 0l), ++modifications;
+			break;
+		case 0: if (is_add(e) || is_mul(e) || is_l_or(e)) e = 0l,                                              ++modifications;
+			else if (is_l_and(e))                     e = 1l,                                              ++modifications;
+	}
+	return modifications;
+}
+
+int astoptimizecontext::optimize_deadcode(expression &e) {
+	int modifications = 0;
+	if (!is_comma(e)) {
+		return 0;	
+	}
+	// Remove all nops from the comma operator, as they do absolutely nothing
+	modifications += std::count_if(e.params.begin(), e.params.end(), is_nop);
+	e.params.remove_if(is_nop);
+
+	return modifications;
 }

@@ -1,5 +1,9 @@
 // tests some math
 
+test_add() = {
+	1 + 2 + 3 + 4;
+}
+
 main(argc, argv) = {
 	var add_sub = 1 + 2 - 3;
 	add_sub *= 2;
