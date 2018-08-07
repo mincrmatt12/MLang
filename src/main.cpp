@@ -3,6 +3,7 @@
 #include <parser.h>
 #include "stringify.h"
 #include "ast_optimize.h"
+#include "compiler.h"
 
 int main(int argc, char ** argv) {
 	std::cout << "mcc version 0.1" << std::endl;
