@@ -1,0 +1,16 @@
+// hard
+
+stress(a) = {
+	var b = 0;
+	while (a != 0) {
+		if (a % 2 == 0) b += a;
+		--a;
+	}
+	return b - 1;
+}
+
+ptrs(b) = {
+	var len = 0;
+	while (*b++ != 0) ++len;
+	return len;
+}

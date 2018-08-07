@@ -91,6 +91,7 @@ static void debug_dump_ctx(parsecontext& ctx) {
 	}
 
 	std::cout << "=== global vars & inits ===" << std::endl;
+	std::cout << ctx.num_globals << std::endl;
 	for (int i = 0; i < ctx.num_globals; i++) {
 		std::cout << "$G" << i << ":" << std::endl;
 		print_tree(ctx.global_initializers[i]);

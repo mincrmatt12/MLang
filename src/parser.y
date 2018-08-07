@@ -121,7 +121,7 @@ struct parsecontext
 {
 	const char* cursor;
 	yy::location loc;
-	unsigned num_globals;
+	unsigned num_globals = 0;
 	std::map<std::string, identifier> global_ids; // should only ever contain global vars allocated at program scope & external funcs, and functions. temporaries allocated here should be handled in the global init stuff
 	std::vector<expression> global_initializers; // defaults to literal 0; used to generate global init code
 
@@ -326,52 +326,53 @@ re2c:define:YYMARKER	= "re2c_marker";
 
 // Keywords
 
-"return"		{ return tk(RETURN); }	
-"while"			{ return tk(WHILE); }
-"var"			{ return tk(VAR); }
-"static"		{ return tk(STATIC); }
-"extern"		{ return tk(EXTERN); }
+"return"                         { return tk(RETURN); }
+"while"                          { return tk(WHILE); }
+"var"                            { return tk(VAR); }
+"static"                         { return tk(STATIC); }
+"extern"                         { return tk(EXTERN); }
+"if"                             { return tk(IF); }
 
 // Constants
 
-"true"			{ return tk(TRUE); }
-"false"			{ return tk(FALSE); }
-"null"			{ return tk(NULL_CONST); }
+"true"                           { return tk(TRUE); }
+"false"                          { return tk(FALSE); }
+"null"                           { return tk(NULL_CONST); }
 
 // Identifier
 
-[a-zA-Z_] [a-zA-Z_0-9]*	{ return tk(IDENTIFIER, std::string(anchor, ctx.cursor)); }
+[a-zA-Z_] [a-zA-Z_0-9]*          { return tk(IDENTIFIER, std::string(anchor, ctx.cursor)); }
 
 // Literals
 
-"\"" [^"]* "\""		{ return tk(STR_CONST, std::string(anchor+1, ctx.cursor-1)); }
-"'" [^'] "'"		{ return tk(CHAR_LITERAL, static_cast<long>(*(anchor+1))); }
-[0-9]+			{ return tk(INT_LITERAL,  std::stol(std::string(anchor, ctx.cursor))); }
+"\"" [^"]* "\""                  { return tk(STR_CONST, std::string(anchor+1, ctx.cursor-1)); }
+"'" [^'] "'"                     { return tk(CHAR_LITERAL, static_cast<long>(*(anchor+1))); }
+[0-9]+                           { return tk(INT_LITERAL,  std::stol(std::string(anchor, ctx.cursor))); }
 
 // Whitespace and ignored things
 
-"\000"			{ return tk(END); }
-"\r\n" | [\r\n]		{ ctx.loc.lines();	return yylex(ctx); }
-"//" [^\r\n]*		{ 			return yylex(ctx); }
-[\t\v\b\f ]		{ ctx.loc.columns();	return yylex(ctx); }
+"\000"                           { return tk(END); }
+"\r\n" | [\r\n]                  { ctx.loc.lines();	return yylex(ctx); }
+"//" [^\r\n]*                    { return yylex(ctx); }
+[\t\v\b\f ]                      { ctx.loc.columns();	return yylex(ctx); }
 
 // Operators
 
-"&&"			{ return tk(AND); }
-"||"			{ return tk(OR); }
-"=="			{ return tk(EQ); }
-"!="			{ return tk(NE); }
-"++"			{ return tk(PP); }
-"--" 			{ return tk(MM); }
-"+="			{ return tk(ADD_EQ); }
-"-="			{ return tk(SUB_EQ); }
-"*="			{ return tk(MUL_EQ); }
-"/="			{ return tk(DIV_EQ); }
-"..."			{ return tk(ELLIPSIS); }
+"&&"                             { return tk(AND); }
+"||"                             { return tk(OR); }
+"=="                             { return tk(EQ); }
+"!="                             { return tk(NE); }
+"++"                             { return tk(PP); }
+"--"                             { return tk(MM); }
+"+="                             { return tk(ADD_EQ); }
+"-="                             { return tk(SUB_EQ); }
+"*="                             { return tk(MUL_EQ); }
+"/="                             { return tk(DIV_EQ); }
+"..."                            { return tk(ELLIPSIS); }
 
 // Invalid
 
-.			{ return s([](auto... s){return mlang_parser::symbol_type(s...);}, mlang_parser::token_type(ctx.cursor[-1]&0xFF)); }
+.                                { return s([](auto... s){ return mlang_parser::symbol_type(s...);}, mlang_parser::token_type(ctx.cursor[-1]&0xFF)); }
 
 %}
 	#undef tk
