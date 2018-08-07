@@ -59,10 +59,7 @@ void astoptimizecontext::find_pure_funcs() {
 void astoptimizecontext::optimize() {
 	this->find_pure_funcs();
 	this->optimize_iterator(make_transform_iterator(this->functions.begin(), this->functions.end(), [&](function &e) -> auto& {return e.code;}), transform_iterator<expression &>());
-	for (auto &e : functions) {
-		this->optimize_iterator(e.global_initializers.begin(), e.global_initializers.end());
-	}
-	this->optimize_iterator(make_transform_iterator(this->global_inits.begin(), this->global_inits.end(), [&](auto &e) -> auto& {return e.second;}), transform_iterator<expression &>());
+	this->optimize_iterator(this->global_inits.begin(), this->global_inits.end());
 }	
 
 bool astoptimizecontext::is_pure(const expression &e, bool typeonly) {
@@ -433,6 +430,17 @@ int astoptimizecontext::optimize_simplify(expression &e) {
 			if (e.params.back() == e.params.front() && is_pure(e.params.back())) {
 				e = expression(std::move(e.params.back()));
 				++modifications;
+			}
+			break;
+		case ex_type::comma:
+			// Check if the last element of the comma is the same as the preceeding assign target
+			// 
+			// (a=3, a)
+			// becomes
+			// (a=3)
+			if (e.params.size() >= 2) {
+				auto& last = e.params.back(), &prev = *std::next(e.params.rbegin());
+				if (is_assign(prev) && prev.params.back() == last) e.params.pop_back();
 			}
 			break;
 		default:

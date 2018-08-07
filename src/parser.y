@@ -95,8 +95,7 @@ ENUM_EXPRESSIONS(o)
 struct function {
 	std::string name;
 	expression code;
-	unsigned int num_vars = 0; unsigned int num_args = 0; unsigned int num_globals = 0;
-	std::vector<expression> global_initializers{};
+	unsigned int num_vars = 0; unsigned int num_args = 0;
 };
 
 struct ext_function {
@@ -122,9 +121,9 @@ struct parsecontext
 {
 	const char* cursor;
 	yy::location loc;
-	int num_globals;
+	unsigned num_globals;
 	std::map<std::string, identifier> global_ids; // should only ever contain global vars allocated at program scope & external funcs, and functions. temporaries allocated here should be handled in the global init stuff
-	std::map<std::string, expression> global_initializers; // defaults to literal 0; used to generate global init code
+	std::vector<expression> global_initializers; // defaults to literal 0; used to generate global init code
 
 	std::vector<function> func_list;
 	std::vector<ext_function> ext_list;
@@ -143,7 +142,7 @@ public:
 	inline bool parsing_function() const {return scopes.size() != 0;}
 
 	expression defvar(const std::string& name) {return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name});}
-	expression defglobvar(const std::string& name)	{return define(name, identifier{id_type::global_var,       !parsing_function() ? num_globals++ : current_fun.num_globals++, name});}
+	expression defglobvar(const std::string& name)	{return define(name, identifier{id_type::global_var,       num_globals++, name});}
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
 	expression defparm(const std::string& name)	{
@@ -231,7 +230,7 @@ library: defs;
 
 defs: defs function
     | defs "extern" extern_function ';'
-    | defs "static" var_decl {ctx.defglobvar($3.name); ctx.global_initializers.emplace(M($3.name), M($3.v));}';'
+    | defs "static" var_decl {ctx.defglobvar($3.name); ctx.global_initializers.emplace_back(M($3.v));}';'
     | %empty;
 
 function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;};
@@ -254,7 +253,7 @@ stmt: comp_stmt '}'			{ $$ = M($1); --ctx;}
     | expr ';'				{ $$ = M($1);}
     | ';'				{ $$ = e_nop();};
 
-var_def: "static" var_decl		{ $$ = e_nop(); ctx.defglobvar($2.name); ctx.current_fun.global_initializers.emplace_back(M($2.v));}
+var_def: "static" var_decl		{ $$ = e_nop(); ctx.defglobvar($2.name); ctx.global_initializers.emplace_back(M($2.v));}
 	| "var" var_decl 		{ $$ = ctx.defvar(M($2.name)) %= M($2.v); };
 var_defs: var_defs ',' var_def		{ $$ = M($1); $$.params.push_back(M($3));}
 	| var_def			{ $$ = e_comma(M($1));};	

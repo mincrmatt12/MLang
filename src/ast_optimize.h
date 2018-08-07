@@ -17,7 +17,7 @@
 struct astoptimizecontext {
 	// these are moved out of the parsecontext
 	std::vector<function> functions; 
-	std::map<std::string, expression> global_inits;
+	std::vector<expression> global_inits;
 
 	// moved out so that these can be moved when compiling
 	std::vector<ext_function> ext_functions;

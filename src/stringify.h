@@ -91,13 +91,10 @@ static void debug_dump_ctx(parsecontext& ctx) {
 	}
 
 	std::cout << "=== global vars & inits ===" << std::endl;
-	for (const auto &[k, v] : ctx.global_ids) {
-		if (v.type != id_type::global_var) continue;
-		val_print(v); std::cout << ": " << std::endl;
-		if (ctx.global_initializers.count(k) != 0) {
-			print_tree(ctx.global_initializers[k]);
-			std::cout << std::endl;
-		}
+	for (int i = 0; i < ctx.num_globals; i++) {
+		std::cout << "$G" << i << ":" << std::endl;
+		print_tree(ctx.global_initializers[i]);
+		std::cout << std::endl;
 	}
 
 	std::cout << "=== functions ===" << std::endl;
@@ -105,11 +102,6 @@ static void debug_dump_ctx(parsecontext& ctx) {
 		std::cout << f.name << "(";
 		for (int c = 0; c < f.num_args; c++) std::cout << "P" << c << ",";
 		std::cout << "): " << std::endl;
-		std::cout << "= globals =" << std::endl;
-		for (int i = 0; i < f.num_globals; i++) {
-			std::cout << "$G" << i << ": " << std::endl;
-			print_tree(f.global_initializers[i]);
-		}
 		std::cout << "= code =" << std::endl;
 		print_tree(f.code);
 	}
@@ -127,8 +119,9 @@ static void debug_dump_ctx(astoptimizecontext& ctx) {
 
 	std::cout << "=== global vars & inits ===" << std::endl;
 	int count = 0;
-	for (const auto &[k, v] : ctx.global_inits) {
-		std::cout << "$G" << count << "\t" << k << ":" << std::endl;
+	for (const auto &v : ctx.global_inits) {
+		std::cout << "$G" << count << ":" << std::endl;
+		++count;
 		print_tree(v);
 	}
 
@@ -137,11 +130,6 @@ static void debug_dump_ctx(astoptimizecontext& ctx) {
 		std::cout << f.name << "(";
 		for (int c = 0; c < f.num_args; c++) std::cout << "P" << c << ",";
 		std::cout << "): " << std::endl;
-		std::cout << "= globals =" << std::endl;
-		for (int i = 0; i < f.num_globals; i++) {
-			std::cout << "$G" << i << ": " << std::endl;
-			print_tree(f.global_initializers[i]);
-		}
 		std::cout << "= code =" << std::endl;
 		print_tree(f.code);
 	}
