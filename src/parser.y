@@ -32,7 +32,7 @@ struct identifier {
 
 #define ENUM_EXPRESSIONS(o) \
 	o(nop) o(string_ref) o(literal_number) o(ident) /* nop, atomic types (char is converted to a literal number before here) */\
-	o(add) o(neg) o(mul) o(div) o(eq)		/* arithmetic operators (sub is converted from neg + add) mul does not have a simpler repr, overrideable with smath_mul func */ \
+	o(add) o(neg) o(mul) o(div) o(eq) o(gt)		/* arithmetic operators (sub is converted from neg + add) mul does not have a simpler repr, overrideable with smath_mul func */ \
 	o(l_or) o(l_and) o(loop)			/* logical loop is while (param0) do param 1.. */ \
 	o(addr) o(deref)				/* pointer arithmetic */ \
 	o(fcall)					/* call param0 with param 1.. n */ \
@@ -141,7 +141,7 @@ public:
 
 	inline bool parsing_function() const {return scopes.size() != 0;}
 
-	expression defvar(const std::string& name) {return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name});}
+	expression defvar(const std::string& name) {if (!parsing_function()) global_initializers.emplace_back(0l); return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name});}
 	expression defglobvar(const std::string& name)	{return define(name, identifier{id_type::global_var,       num_globals++, name});}
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
@@ -208,14 +208,14 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 %token RETURN "return" WHILE "while" IF "if" VAR "var" STATIC "static" EXTERN "extern" 
 %token TRUE "true" FALSE "false" NULL_CONST "null"
 
-%token OR "||" AND "&&" EQ "==" NE "!=" PP "++" MM "--" ADD_EQ "+=" SUB_EQ "-=" MUL_EQ "*=" DIV_EQ "/=" ELLIPSIS "..."
+%token OR "||" AND "&&" EQ "==" NE "!=" PP "++" MM "--" ADD_EQ "+=" SUB_EQ "-=" MUL_EQ "*=" DIV_EQ "/=" ELLIPSIS "..." LT_EQ "<=" GT_EQ ">="
 %token STR_CONST INT_LITERAL CHAR_LITERAL IDENTIFIER
 
 %left ','
 %right '?' ':' '=' "+=" "-=" "*=" "/="
 %left "||"
 %left "&&"
-%left "==" "!="
+%left "==" "!=" "<=" ">=" '<' '>'
 %left '+' '-'
 %left '/' '%'
 %right '*' '&' "--" "++"
@@ -283,6 +283,14 @@ expr: STR_CONST				{ $$ = M($1);}
 					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(C($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
 					}
     | expr '/' expr			{ $$ = e_div(M($1), M($3));}
+    | expr '<' expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
+					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3))), 0l)); }
+    | expr ">=" expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
+					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3)))); }
+    | expr '>' expr			{ $$ = e_gt(M($1), M($3));}
+    | expr "<=" expr			{ $$ = e_eq(e_gt(M($1), M($3)), 0l);}
     | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(M($1), M($3)); } }
     | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
@@ -368,6 +376,8 @@ re2c:define:YYMARKER	= "re2c_marker";
 "-="                             { return tk(SUB_EQ); }
 "*="                             { return tk(MUL_EQ); }
 "/="                             { return tk(DIV_EQ); }
+"<="				 { return tk(LT_EQ); }
+">="				 { return tk(GT_EQ); }
 "..."                            { return tk(ELLIPSIS); }
 
 // Invalid

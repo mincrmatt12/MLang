@@ -1,0 +1,5 @@
+test() = {
+	var l = 3;
+	while (l-- > 0) {;}
+	return 0;
+}

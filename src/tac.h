@@ -16,21 +16,33 @@
 
 // Define the addr_ref
 
+#ifndef TAC_H
+#define TAC_H
 #include <parser.h>
+#include <queue>
+#include <unordered_set>
 
 #define ENUM_ADDR_REFS(o) \
 	o(reg) o(num) o(ident)
 
 #define o(n) n, 
 enum struct ar_type {
-	ENUM_ADDR_REFS(o)
+	ENUM_ADDR_REFS(o) unknown
 };
 #undef o
 
 struct addr_ref {
-	long num;
+	ar_type t{ar_type::unknown};
+	long num=0;
 	identifier ident{};
-	ar_type t;
+	
+	addr_ref() = default;
+
+	template<typename T>
+	addr_ref(ar_type t_, T&& p) : addr_ref(std::forward<T>(p))  { t = t_; } 
+	
+	addr_ref(long n) : num(n) {}
+	addr_ref(identifier i) : ident(i) {t = ar_type::ident;}
 };
 
 #define o(n) \
@@ -51,9 +63,11 @@ ENUM_ADDR_REFS(o)
 	o(neg) /* p0 <- -p1 */ \
 	o(ifnz)	/* if not zero, jump */ \
 	o(read) o(write) /* read/write derefs */ \
-	o(eq) \
+	o(eq) o(gt) \
 	o(fcall) o(ret) \
-	o(addrof) /* get the physical address of p1 and put it into p0. should be implemented with a simple constant store at the compile level */
+	o(addrof) /* get the physical address of p1 and put it into p0. should be implemented with a simple constant store at the compile level */ \
+	o(str) /* kludge to get a pointer to the string table and place it into the target. if constants are added they will be stored with this type 
+		  after it is renamed */
 
 #define o(n) n, 
 enum struct st_type {
@@ -68,7 +82,9 @@ struct statement {
 	statement*		cond{nullptr};
 
 	template<typename... T>
-	statement(st_type t, T&&... args) : t(t), params{std::forward<T>(args)...} {}
+	statement(st_type t_, T&&... args) : t(t_), params{std::forward<T>(args)...} {}
+
+	statement(st_type t_, std::vector<addr_ref> args) : t(t_) {params = std::move(args);}
 };
 
 #define o(n) \
@@ -84,7 +100,52 @@ ENUM_STATEMENTS(o)
 // The compilation unit also contains the expression to be compiled. It also contains a pointer to the start of the compiled expression as a statement.
 
 struct compilation_unit {
-	expression e;
-	statement * start;
-	unsigned num_params; unsigned num_locals;
+	expression e{};
+	statement * start{nullptr};
+	statement ** tgt;
+	unsigned num_params = 0; unsigned num_locals = 0;
+	unsigned counter = 0;
+	
+	compilation_unit() : tgt(&start) {};
+
+	compilation_unit(function &&n) {
+		e = std::move(n.code);
+		num_params = std::move(n.num_args);
+		num_locals = std::move(n.num_vars);
+		counter = num_params + num_locals;
+		tgt = &start;
+	}
+
+	compilation_unit(expression &&express) {
+		e = std::move(express);	
+		tgt = &start;
+	}
 };
+
+// std::map<stmt *, int> traverse(stmt *):
+//
+// Creates a map of statements to indices representing the order in which they will be written in a stream
+// Traverses all next pointers first followed by cond pointers in a breadth first system
+static std::map<statement *, int> traverse(statement *s) {
+	std::map<statement *, int> result{};
+	std::queue<statement *> to_read{};
+	std::unordered_set<statement *> visited{};
+	to_read.push(s);
+	int index = 0;
+
+	while (!to_read.empty()) {
+		statement *v = to_read.front();
+		if (v->t == st_type::ret && v->next != nullptr) std::cerr << "AAAAAAA" << std::endl;
+		if (visited.count(v) != 0) {to_read.pop(); continue;}
+		visited.insert(v);
+		result[v] = index++;
+		to_read.pop();
+
+		if (v->next != nullptr) to_read.push(v->next);
+		if (v->cond != nullptr) to_read.push(v->cond);
+	}
+
+	return result;
+}
+
+#endif

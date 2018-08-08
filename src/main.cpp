@@ -33,5 +33,12 @@ int main(int argc, char ** argv) {
 	debug_dump_ctx(ast_octx);
 #endif
 
+	compiler comp(std::move(ast_octx));
+	comp.compile_all();
+
+#ifndef NDEBUG
+	debug_dump_ctx(comp);
+#endif
+
 	return 0;
 }

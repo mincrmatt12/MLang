@@ -423,6 +423,14 @@ int astoptimizecontext::optimize_simplify(expression &e) {
 				e = 0l;
 			else --modifications;
 			break;
+		case ex_type::gt:
+			// Check if there are two values
+			if (is_literal_number(e.params.front()) && is_literal_number(e.params.back())) {
+				// Set the e if its good
+				e = static_cast<long>(e.params.front().numvalue > e.params.back().numvalue);
+				++modifications;
+			}
+			break;
 		case ex_type::assign:
 			// Check if we are doing
 			// a = a

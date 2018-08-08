@@ -10,6 +10,7 @@
 #include <iostream>
 #include <parser.h>
 #include "ast_optimize.h"
+#include "compiler.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -17,17 +18,12 @@ struct tree_toggle_t {
 	tree_toggle_t * next = nullptr;
 };
 
-template<typename T>
-static void val_print(const T &v) {};
 
-template<>
-void val_print(const long &v) {std::cout << v;}
+static void val_print(const long &v) {std::cout << v;}
 
-template<>
-void val_print(const std::string &v) {std::cout << v;} 
+static void val_print(const std::string &v) {std::cout << v;} 
 
-template<>
-void val_print(const identifier &v) {
+static void val_print(const identifier &v) {
 	switch (v.type) {
 		case id_type::undefined: 	std::cout << "$U"; break;
 		case id_type::function:  	std::cout << "$F"; break;
@@ -43,6 +39,7 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 	if (head == nullptr) {
 		head = new tree_toggle_t;
 		head->first = head;
+		std::cout << "╚═╦══";
 	}
 	else {
 		tree_toggle_t * last = head;
@@ -52,11 +49,26 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 		tree_toggle_t * starting = head->first;
 		std::cout << "  ";
 		for (int i = 0; i < depth-1; i++) {
-			std::cout << (starting->yes ? "| " : "  ");
+			std::cout << (starting->yes ? "║ " : "  ");
 			starting = starting->next;
 		}
+		if (starting->yes) {
+			if (e.params.size() > 0) {
+				std::cout << "╠═╦═";
+			}	
+			else {
+				std::cout << "╠═══";
+			}
+		}
+		else {
+			if (e.params.size() > 0) {
+				std::cout << "╚═╦═";
+			}	
+			else {
+				std::cout << "╚═══";
+			}
+		}
 	}
-	std::cout << "|- ";
 #define o(n) case ex_type::n: std::cout << #n; break;
 	switch (e.t) {
 		ENUM_EXPRESSIONS(o)
@@ -134,6 +146,97 @@ static void debug_dump_ctx(astoptimizecontext& ctx) {
 		std::cout << "= code =" << std::endl;
 		print_tree(f.code);
 	}
+}
+
+// Dumping functions for statements
+
+static void val_print(const addr_ref &r) {
+	switch (r.t) {
+		case ar_type::unknown:
+			std::cout << "??";
+			break;
+		case ar_type::num:
+			std::cout << "#" << r.num;
+			break;
+		case ar_type::reg:
+			std::cout << "R" << r.num;
+			break;
+		case ar_type::ident:
+			val_print(r.ident);
+			break;
+	}
+}
+
+static void val_print(const statement &s) {
+#define o(n) case st_type::n: std::cout << #n; break;
+	switch (s.t) {
+		ENUM_STATEMENTS(o)
+	}
+#undef o
+	for (auto &p : s.params) {
+		std::cout << " ";
+		val_print(p);
+	}
+}
+
+static void print_statement_list(statement * start) {
+	auto indices = traverse(start); // Get the canonical order of all of these things.
+	auto labels  = std::map<int, int>{};
+	auto trav    = std::map<int, statement *>{};
+
+	// Create a reverse lookup for iteration
+	for (auto &[k, v] : indices) trav[v] = k;
+
+	auto add_label = [&, l=0](int i) mutable {
+		if (labels.count(i) == 0) {
+			labels[i] = l++;
+		}	
+	};
+
+	// Assume nothing requires a label. We only need one if we decide we need to jump there at some point.
+	// We only jump somewhere if the index of the next pointer is not equal to the index of the current
+	// statement + 1.
+	// Since conditional statements ALWAYS jump, we can assume they need labels whenever we see them.
+	
+	// Step one: determine what needs labels by iterating over everything in the indices map
+	for (auto &[index, st] : trav) {
+		if (st->cond != nullptr) add_label(indices[st->cond]);
+		// Check if the index of the next pointer (if it exists) is equal to 1+index
+		if (st->next != nullptr) {
+			if (indices[st->next] != index+1) add_label(indices[st->next]);
+		}
+	}
+
+	// Now, print all of the statements, optionally adding labels and jumps
+	for (auto &[index, st] : trav) {
+		if (labels.count(index) != 0) {
+			std::cout << ".L" << labels[index] << ":" << std::endl;
+		}
+		std::cout << "  ";
+		val_print(*st);
+		if (st->cond != nullptr) {
+			std::cout << " .L" << labels[indices[st->cond]];
+		}
+		std::cout << std::endl;
+		if (st->next != nullptr) {
+			if (indices[st->next] != index+1) {
+				std::cout << "  jmp .L" << labels[indices[st->next]] << std::endl;
+			}
+		}
+	}
+}
+
+static void debug_dump_ctx(compiler &ctx) {
+	// First, print out all of the functions
+	
+	for (auto &[name, stp] : ctx.func_compileunits) {
+		if (stp.start == nullptr) continue;
+		std::cout << name << ":" << std::endl;
+		print_statement_list(stp.start);
+	}
+
+	std::cout << "$GLOBAL:" << std::endl;
+	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
 }
 
 #endif
