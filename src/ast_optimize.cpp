@@ -456,3 +456,54 @@ int astoptimizecontext::optimize_simplify(expression &e) {
 	}
 	return modifications;
 }
+
+int astoptimizecontext::optimize_simplify_casts(expression &e) {
+	int modifications = 0;
+	// Remove double casts;
+	//
+	// cast -> cast -> n
+	// is cast -> n
+	
+	if (is_cast(e)) {
+		if (is_cast(e.params.front())) {
+			++modifications;
+			e = expression(std::move(e.params.front()));
+			std::cout << "simplified nested casts" << std::endl;
+		}
+	}
+
+	//
+	// Try and simplify situations like:
+	//
+	// cast<n>
+	//  | add
+	//    | cast<n>
+	//      | a
+	//     ...
+	//
+	// where all parameters are casted to the same value and all parameters are the exact same
+	
+	if (is_add(e) || is_mul(e) || is_div(e) || is_eq(e) || is_gt(e)) {
+		if (e.params.size() > 0) {
+			if (is_cast(e.params.front())) {
+				if (std::all_of(e.params.begin(), e.params.end(), [&](auto &p){
+					return is_cast(p) && p.castvalue == e.params.front().castvalue			;
+				})) {
+					// They are all casted, now make sure each of the types are equal
+					ex_rtype rtt = ex_rtype(e.params.front().castvalue);
+					if (std::all_of(e.params.begin(), e.params.end(), [&](auto &p){
+						return p.params.front().get_type() == e.params.front().params.front().get_type()			;
+					})) {
+						for (auto &f : e.params) {
+							f = expression(std::move(f.params.front()));
+						}
+						e = cast(std::move(e), ex_rtype(rtt));
+						std::cout << "extracted casts" << std::endl;
+						++modifications;
+					}
+				}
+			}
+		}
+	}
+	return modifications;
+}

@@ -1,16 +1,24 @@
 // hard
-
-stress(a) = {
-	var b = 0;
-	while (a > 0) {
-		if (a % 2 == 0) b += a;
-		--a;
-	}
-	return b - 1;
-}
-
-ptrs(b) = {
+strlen(b) = {
 	var len = 0;
 	while (*b++ != 0) ++len;
 	return len;
+}
+
+extern scanf(format, ...);
+extern printf(format, ...);
+extern malloc(amt);
+extern free(ptr);
+
+main(argc, argv) = {
+	if (argc > 1) {
+		printf("The output is %s", argv[1]);
+	}
+	else {
+		printf("What is your name? ");
+		var chptr = malloc(50);
+		scanf("%s", chptr);
+		printf("Hello, %s. You entered %i characters", chptr, strlen(chptr));
+		free(chptr);
+	}
 }

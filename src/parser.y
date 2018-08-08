@@ -24,10 +24,69 @@
 enum class id_type { ENUM_IDENTIFIER_TYPES(o) };
 #undef o
 
+struct ex_rtype {
+	unsigned size = 8;
+	ex_rtype * ptr{nullptr};
+
+	ex_rtype() : size(64), ptr(new ex_rtype(8, false)) {}
+	ex_rtype(unsigned siz, bool pointer) : size(pointer ? 64 : siz), ptr(pointer ? new ex_rtype(siz, false) : nullptr) {}
+	ex_rtype(const ex_rtype &e, bool pointer) {
+		if (pointer) {
+			size = 64;
+			ptr = new ex_rtype(e);
+		}
+		else {
+			size = e.size;
+			if (e.ptr != nullptr) {
+				ptr = new ex_rtype(*e.ptr);
+			} 
+			else {
+				ptr = nullptr;
+			}
+		}
+	}
+	ex_rtype(const ex_rtype &e) {
+		size = e.size;
+		if (e.ptr != nullptr) {
+			ptr = new ex_rtype(*e.ptr);
+		} 
+		else {
+			ptr = nullptr;
+		}
+	}
+	ex_rtype(ex_rtype &&e) {
+		size = e.size;
+		ptr = std::exchange(e.ptr, nullptr);
+	}	
+	~ex_rtype() {
+		delete ptr;
+	}
+
+	ex_rtype& operator=(const ex_rtype& other) {
+		return *this = ex_rtype(other);
+	}
+	ex_rtype& operator=(ex_rtype&& other) {
+		size = other.size;
+		std::swap(ptr, other.ptr);
+	}
+
+	bool operator==(const ex_rtype &e) const {
+		if (ptr != nullptr) {
+			if (e.ptr == nullptr) return false;
+			return e.size == size && *e.ptr == *ptr;
+		}
+		else {
+			if (ptr != nullptr) return false;
+			return e.size == size;
+		}
+	}
+};
+
 struct identifier {
 	id_type type = id_type::undefined;
 	std::size_t index = 0; // index for func/parameter/scopevar/globvar
 	std::string name; // name + linker name for extern_function
+	ex_rtype t{};
 };
 
 #define ENUM_EXPRESSIONS(o) \
@@ -38,7 +97,8 @@ struct identifier {
 	o(fcall)					/* call param0 with param 1.. n */ \
 	o(assign)					/* assign 0 to 1 */ \
 	o(comma)					/* sequence, internal use */ \
-	o(ret)						/* return p0 */
+	o(ret)						/* return p0 */ \
+	o(cast)						/* cast up or down types */
 
 #define o(n) n,
 enum class ex_type {ENUM_EXPRESSIONS(o)};
@@ -51,6 +111,7 @@ struct expression {
 	std::string strvalue{};
 	long numvalue=0;
 	expr_vec params;
+	ex_rtype castvalue{};
 
 	// function uses first parameter as function call target. the jump target is then eval'd later based on its type
 
@@ -63,17 +124,26 @@ struct expression {
 	expression(std::string &&s)	: t(ex_type::string_ref), strvalue(std::move(s)) {}
 	expression(long v)		: t(ex_type::literal_number), numvalue(v) {}
 	expression(char c)		: t(ex_type::literal_number), numvalue(static_cast<long>(c)) {}
+	expression(ex_rtype &&rt, expression &&e) : t(ex_type::cast), castvalue(std::move(rt)), params{std::move(e)} {}
 
 	bool has_side_effects(bool typeonly=false) const;		// simple version, used for very basic checks during parsing
 	// complex version, implemented in the ast optimizer and used during optimization checking
 	bool is_compiletime_expr() const;
-	expression operator%=(expression &&b) && { return expression(ex_type::assign, std::move(b), std::move(*this)); }
+	expression operator%=(expression &&b) && { 
+		return expression(ex_type::assign, cast(std::move(b), ex_rtype(get_type())), std::move(*this)); 
+	}
 	bool operator==(const expression &e) const {
 		return (e.t == t) 
 			&& (t != ex_type::ident || (ident.type == e.ident.type && ident.index == e.ident.index))
 			&& (t != ex_type::string_ref || strvalue == e.strvalue)
 			&& (t != ex_type::literal_number || numvalue == e.numvalue)
 			&& params == e.params;
+	}
+
+	ex_rtype get_type() const;
+
+	inline expression cast(expression &&e, ex_rtype &&rt) {
+		return expression(std::forward<ex_rtype>(rt), std::forward<expression>(e));
 	}
 };
 
@@ -92,10 +162,38 @@ inline bool is_##n(const expression& e) {\
 ENUM_EXPRESSIONS(o)
 #undef o
 
+inline expression cast(expression &&e, ex_rtype &&rt) {
+	return expression(std::forward<ex_rtype>(rt), std::forward<expression>(e));
+}
+
+static bool ensure_cast(expression &tgt, const expression &other) {
+	auto tt = tgt.get_type(), ot = other.get_type();
+	if (ot.ptr != nullptr && tt.ptr == nullptr) {
+		// Cast the target to be a pointer type, as we can always upcast to a pointer
+		tgt = cast(std::move(tgt), std::move(ex_rtype(ot)));
+		return true;
+	}
+	if (ot.ptr != nullptr && tt.ptr != nullptr) {
+		// Make sure the pointed to types are the same
+		return *ot.ptr == *tt.ptr;
+		// If that returned false, the ctx should throw a syntax error
+	}
+	if (tt.ptr != nullptr && ot.ptr == nullptr) {
+		return true; // Cast the other argument instead
+	}
+	// There are no pointers, check if we would need a downcast
+	if (tt.size > ot.size) return true;
+
+	// Otherwise, cast tt.size to ot.size
+	tgt = cast(std::move(tgt), std::move(ex_rtype(ot)));
+	return true;
+}
+
 struct function {
 	std::string name;
 	expression code;
 	unsigned int num_vars = 0; unsigned int num_args = 0;
+	std::vector<ex_rtype> vtypes{};
 };
 
 struct ext_function {
@@ -109,6 +207,7 @@ struct parsecontext;
 struct var_decl_shim {
 	std::string name;
 	expression v;
+	ex_rtype t;
 };
 }
 
@@ -124,6 +223,7 @@ struct parsecontext
 	unsigned num_globals = 0;
 	std::map<std::string, identifier> global_ids; // should only ever contain global vars allocated at program scope & external funcs, and functions. temporaries allocated here should be handled in the global init stuff
 	std::vector<expression> global_initializers; // defaults to literal 0; used to generate global init code
+	std::vector<ex_rtype> globvtypes{};
 
 	std::vector<function> func_list;
 	std::vector<ext_function> ext_list;
@@ -141,16 +241,25 @@ public:
 
 	inline bool parsing_function() const {return scopes.size() != 0;}
 
-	expression defvar(const std::string& name) {if (!parsing_function()) global_initializers.emplace_back(0l); return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name});}
-	expression defglobvar(const std::string& name)	{return define(name, identifier{id_type::global_var,       num_globals++, name});}
+	expression defvar(const std::string& name, ex_rtype t) {if (!parsing_function()) global_initializers.emplace_back(0l); 
+		if (parsing_function()) {
+			current_fun.vtypes.emplace_back(t);
+		}	
+		else {
+			globvtypes.emplace_back(t);
+		}
+		return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name, std::move(t)});
+	}
+	expression defglobvar(const std::string& name, ex_rtype t)	{(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); return define(name, identifier{id_type::global_var,       num_globals++, name, std::move(t)});}
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
-	expression defparm(const std::string& name)	{
+	expression defparm(const std::string& name, ex_rtype t)	{
 		if (!parsing_function()) {
 			current_ext.num_args++;
 			return e_nop();	
 		}
-		return define(name, identifier{id_type::parameter,        current_fun.num_args++, name});
+		(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); 
+		return define(name, identifier{id_type::parameter,        current_fun.num_args++, name, std::move(t)});
 	}
 
 	void defvarargs() {
@@ -162,7 +271,7 @@ public:
 
 	/* def* defines stuff */
 
-	expression temp()				{return defvar("$T" + std::to_string(tempvar_count++));}
+	expression temp()				{return defvar("$T" + std::to_string(tempvar_count++), std::move(ex_rtype{ 64, false }));}
 
 	expression use_name(const std::string& name) {
 		for (auto j = scopes.crbegin(); j != scopes.crend(); ++j) {
@@ -202,10 +311,12 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 #define M(x) std::move(x)
 #define C(x) expression(x)
 
+
+
 } // end %code
 
 %token END 0
-%token RETURN "return" WHILE "while" IF "if" VAR "var" STATIC "static" EXTERN "extern" 
+%token RETURN "return" WHILE "while" IF "if" VAR "var" STATIC "static" EXTERN "extern" ELSE "else"
 %token TRUE "true" FALSE "false" NULL_CONST "null"
 
 %token OR "||" AND "&&" EQ "==" NE "!=" PP "++" MM "--" ADD_EQ "+=" SUB_EQ "-=" MUL_EQ "*=" DIV_EQ "/=" ELLIPSIS "..." LT_EQ "<=" GT_EQ ">="
@@ -214,6 +325,7 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 %left ','
 %right '?' ':' '=' "+=" "-=" "*=" "/="
 %left "||"
+%right "th" "else"
 %left "&&"
 %left "==" "!=" "<=" ">=" '<' '>'
 %left '+' '-'
@@ -225,12 +337,13 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 %type<std::string>	IDENTIFIER STR_CONST
 %type<expression> 	expr c_expr stmt comp_stmt var_def var_defs
 %type<var_decl_shim>	var_decl
+%type<ex_rtype>		typespec
 %%
 library: defs;
 
 defs: defs function
     | defs "extern" extern_function ';'
-    | defs "static" var_decl {ctx.defglobvar($3.name); ctx.global_initializers.emplace_back(M($3.v));}';'
+    | defs "static" var_decl {ctx.defglobvar($3.name, $3.t); ctx.global_initializers.emplace_back(M($3.v));}';'
     | %empty;
 
 function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;};
@@ -239,24 +352,29 @@ extern_function: IDENTIFIER {ctx.defexternal($1);}'(' paramdecls ')' {ctx.add_ex
 paramdecls: paramdecl
 	  | paramdecl ',' ELLIPSIS {ctx.defvarargs();}
 	  | %empty;
-paramdecl: paramdecl ',' IDENTIFIER {ctx.defparm($3);}
-	 | IDENTIFIER {ctx.defparm($1);};
+paramdecl: paramdecl ',' typespec IDENTIFIER {ctx.defparm($4, $3);}
+	 | typespec IDENTIFIER {ctx.defparm($2, $1);};
 
-var_decl: IDENTIFIER '=' expr		{ $$ = {M($1), M($3)};}
-	| IDENTIFIER			{ $$ = {M($1), 0l};};
+var_decl: typespec IDENTIFIER '=' expr		{ $$ = {M($2), M($4), M($1)};}
+	| typespec IDENTIFIER			{ $$ = {M($2), 0l, M($1)};};
+
+typespec: INT_LITERAL			{ $$ = ex_rtype($1, false);}
+	| typespec '*'			{ $$ = ex_rtype($1, true);}
+	| %empty			{ $$ = {};};
 
 stmt: comp_stmt '}'			{ $$ = M($1); --ctx;}
-    | "if" '(' expr ')' stmt		{ $$ = e_l_and(M($3), M($5));}
+    | "if" '(' expr ')' stmt %prec "th" { $$ = e_l_and(M($3), M($5));}
+    | "if" '(' expr ')' stmt "else" stmt{ $$ = e_l_or(e_l_and(M($3), e_comma(M($5), 1l)), M($7));}
     | "while" '(' expr ')' stmt		{ $$ = e_loop(M($3), M($5));}
     | "return" expr ';'			{ $$ = e_ret(M($2));}
     | var_defs ';'			{ $$ = M($1);}
     | expr ';'				{ $$ = M($1);}
     | ';'				{ $$ = e_nop();};
 
-var_def: "static" var_decl		{ $$ = e_nop(); ctx.defglobvar($2.name); ctx.global_initializers.emplace_back(M($2.v));}
-	| "var" var_decl 		{ $$ = ctx.defvar(M($2.name)) %= M($2.v); };
+var_def: "static" var_decl		{ $$ = e_nop(); ctx.defglobvar($2.name, $2.t); ctx.global_initializers.emplace_back(M($2.v));}
+	| "var" var_decl 		{ $$ = ctx.defvar(M($2.name), $2.t) %= M($2.v); };
 var_defs: var_defs ',' var_def		{ $$ = M($1); $$.params.push_back(M($3));}
-	| var_def			{ $$ = e_comma(M($1));};	
+	| var_def			{ $$ = e_comma(M($1));};
 comp_stmt: '{'				{ ++ctx; $$ = e_comma();}
 	 | comp_stmt stmt		{ $$ = M($1); $$.params.push_back(M($2));};
 
@@ -271,26 +389,40 @@ expr: STR_CONST				{ $$ = M($1);}
     | "false"				{ $$ = 0l;}
     | "null"				{ $$ = 0l;}
     | '(' expr ')'			{ $$ = M($2);}
-    | expr '[' expr ']'			{ $$ = e_deref(e_add(M($1), M($3)));}
+    | expr '[' expr ']'			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_deref(e_add(M($1), M($3)));}
+    | '<' typespec '>' '(' expr ')'	{ $$ = cast(M($5), M($2));}
     | expr '(' ')'			{ $$ = e_fcall(M($1));}
-    | expr '(' c_expr ')'		{ $$ = e_fcall(M($1)); $$.params.splice($$.params.end(), M($3.params));}
+    | expr '(' c_expr ')'		{ $$ = e_fcall(M($1)); $$.params.splice($$.params.end(), M($3.params));
+    					  if (is_ident($$.params.front()) && $$.params.front().ident.type == id_type::function) {
+					  	// Check if we can see this function in the list of functions
+						if (ctx.func_list.size() > $$.params.front().ident.index) {
+							// Grab the function and cast all parameters to the correct types
+							int i = 0;
+							function &f = ctx.func_list[$$.params.front().ident.index];
+							for (auto e = ++$$.params.begin(); e != $$.params.end(); ++e) {
+								*e = cast(std::move(*e), ex_rtype(f.vtypes[i++]));
+							}
+						}
+					  }
+    
+    }
     | expr '=' expr			{ $$ = M($1) %= M($3);}
-    | expr '+' expr			{ $$ = e_add(M($1), M($3));}
-    | expr '-' expr			{ $$ = e_add(M($1), e_neg(M($3)));}
-    | expr '*' expr       %prec '/'	{ $$ = e_mul(M($1), M($3));}
-    | expr '%' expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
-    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}	
+    | expr '+' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), M($3));}
+    | expr '-' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), e_neg(M($3)));}
+    | expr '*' expr       %prec '/'	{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_mul(M($1), M($3));}
+    | expr '%' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(C($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
 					}
-    | expr '/' expr			{ $$ = e_div(M($1), M($3));}
-    | expr '<' expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    | expr '/' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_div(M($1), M($3));}
+    | expr '<' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3))), 0l)); }
-    | expr ">=" expr			{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    | expr ">=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3)))); }
-    | expr '>' expr			{ $$ = e_gt(M($1), M($3));}
-    | expr "<=" expr			{ $$ = e_eq(e_gt(M($1), M($3)), 0l);}
+    | expr '>' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_gt(M($1), M($3));}
+    | expr "<=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_gt(M($1), M($3)), 0l);}
     | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(M($1), M($3)); } }
     | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
@@ -299,16 +431,16 @@ expr: STR_CONST				{ $$ = M($1);}
     					  else {$$ = C($1) %= e_mul(M($1), M($3)); }}
     | expr "/=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_div(M($1), M($3)); } }
-    | expr "||" expr			{ $$ = e_l_or(M($1), M($3));}
-    | expr "&&" expr			{ $$ = e_l_and(M($1), M($3));}
-    | expr "==" expr			{ $$ = e_eq(M($1), M($3)); }
-    | expr "!=" expr			{ $$ = e_eq(e_eq(M($1), M($3)), 0l);}
+    | expr "||" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_or(M($1), M($3));}
+    | expr "&&" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_and(M($1), M($3));}
+    | expr "==" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(M($1), M($3)); }
+    | expr "!=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_eq(M($1), M($3)), 0l);}
     | '&' expr				{ $$ = e_addr(M($2));}
     | '*' expr            %prec '&'	{ $$ = e_deref(M($2));}
     | '-' expr            %prec '&'	{ $$ = e_neg(M($2));}
-    | '!' expr            %prec '&'	{ $$ = e_eq(M($2), 0l);}
+    | '!' expr            %prec '&'	{ $$ = e_eq(M($2)); $$.params.push_back(cast(0l, ex_rtype($$.params.front().get_type())));}
     | "++" expr				{ if ($2.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), 1l)) %= e_deref(a.params.back());}
-    					  else {$$ = C($2) %= e_add(M($2), 1l); }}	
+    					  else {$$ = C($2) %= e_add(M($2), 1l); }}
     | "--" expr           %prec "++"	{ if ($2.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), -1l)) %= e_deref(a.params.back());}
     					  else {$$ = C($2) %= e_add(M($2), -1l); }}
     | expr "++"				{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
@@ -340,6 +472,7 @@ re2c:define:YYMARKER	= "re2c_marker";
 "static"                         { return tk(STATIC); }
 "extern"                         { return tk(EXTERN); }
 "if"                             { return tk(IF); }
+"else"                           { return tk(ELSE); }
 
 // Constants
 
@@ -427,5 +560,89 @@ bool expression::is_compiletime_expr() const {
 			return ident.type == id_type::function;
 		default:
 			return false;
+	}
+}
+
+ex_rtype expression::get_type() const {
+	switch (t) {
+		case ex_type::string_ref:
+			return {};
+		case ex_type::literal_number:
+			return {64, false};
+		case ex_type::ident:
+			return ident.t;
+		case ex_type::nop:
+			return {};
+		case ex_type::assign:
+			return params.front().get_type();
+		case ex_type::comma:
+			return params.back().get_type();
+		case ex_type::cast:
+			return castvalue;
+		case ex_type::fcall:
+			return {};
+		case ex_type::addr:
+			return {params.front().get_type(), true};
+		case ex_type::deref:
+			{
+				ex_rtype t = params.front().get_type();
+				if (t.ptr != nullptr) {
+					return *t.ptr;
+				}
+				else {
+					return {8, false};
+				}
+			}
+		case ex_type::l_or:
+		case ex_type::l_and:
+		case ex_type::loop:
+		case ex_type::gt:
+		case ex_type::eq:
+			return {64, false};
+		case ex_type::ret:
+		case ex_type::add:
+		case ex_type::neg:
+			{
+				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
+					for (auto &e : params) {
+						if (e.get_type().ptr != nullptr) return e.get_type();
+					}
+				}
+				else {
+					if (params.size() == 0) return {64, false};
+					return params.front().get_type();
+				}
+			}
+		case ex_type::mul:
+			{
+				// Ptr types in multiplications are always the same size
+				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
+					for (auto &e : params) {
+						if (e.get_type().ptr != nullptr) return e.get_type();
+					}
+				}
+				else {
+					if (params.size() == 0) return {64, false};
+					auto a = params.front().get_type();
+					if (a.size <= 32) a.size *= 2;
+					return a;
+				}
+			}
+		case ex_type::div:
+			{
+				// Ptr types in multiplications are always the same size
+				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
+					for (auto &e : params) {
+						if (e.get_type().ptr != nullptr) return e.get_type();
+					}
+				}
+				else {
+					if (params.size() == 0) return {64, false};
+					auto a = params.front().get_type();
+					if (a.size >= 8) a.size /= 2;
+					return a;
+				}
+			}
+
 	}
 }

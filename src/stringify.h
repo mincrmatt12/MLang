@@ -35,6 +35,16 @@ static void val_print(const identifier &v) {
 	std::cout << v.index << "\t(" << v.name << ")";
 }
 
+static void val_print(const ex_rtype &v) {
+	std::cout << "<";
+	if (v.ptr != nullptr) {
+		val_print(*v.ptr);
+		std::cout << "*>";
+		return;
+	}
+	std::cout << v.size << ">";
+}
+
 static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nullptr) {
 	if (head == nullptr) {
 		head = new tree_toggle_t;
@@ -76,9 +86,10 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 #undef o
 	std::cout << " ";
 	switch (e.t) {
-		case ex_type::string_ref:	val_print(e.strvalue); break;
-		case ex_type::literal_number: 	val_print(e.numvalue); break;
-		case ex_type::ident: 		val_print(e.ident   ); break;
+		case ex_type::string_ref:	val_print(e.strvalue ); break;
+		case ex_type::literal_number: 	val_print(e.numvalue ); break;
+		case ex_type::ident: 		val_print(e.ident    ); break;
+		case ex_type::cast:		val_print(e.castvalue); break;
 		default:		  break;
 	}
 	std::cout << std::endl;

@@ -128,21 +128,21 @@ struct compilation_unit {
 // Traverses all next pointers first followed by cond pointers in a breadth first system
 static std::map<statement *, int> traverse(statement *s) {
 	std::map<statement *, int> result{};
-	std::queue<statement *> to_read{};
+	std::priority_queue<std::pair<int, statement *>> to_read{};
 	std::unordered_set<statement *> visited{};
-	to_read.push(s);
+	to_read.push({2, s});
 	int index = 0;
 
 	while (!to_read.empty()) {
-		statement *v = to_read.front();
+		auto [_, v] = to_read.top();
 		if (v->t == st_type::ret && v->next != nullptr) std::cerr << "AAAAAAA" << std::endl;
 		if (visited.count(v) != 0) {to_read.pop(); continue;}
 		visited.insert(v);
 		result[v] = index++;
 		to_read.pop();
 
-		if (v->next != nullptr) to_read.push(v->next);
-		if (v->cond != nullptr) to_read.push(v->cond);
+		if (v->next != nullptr) to_read.push({1, v->next});
+		if (v->cond != nullptr) to_read.push({0, v->cond});
 	}
 
 	return result;
