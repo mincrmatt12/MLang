@@ -3,6 +3,7 @@
 #include <parser.h>
 #include "stringify.h"
 #include "ast_optimize.h"
+#include "tac_optimize.h"
 #include "compiler.h"
 
 int main(int argc, char ** argv) {
@@ -40,5 +41,11 @@ int main(int argc, char ** argv) {
 	debug_dump_ctx(comp);
 #endif
 
+	tacoptimizecontext tac_octx(std::move(comp));
+	tac_octx.optimize();
+
+#ifndef NDEBUG
+	debug_dump_ctx(tac_octx);
+#endif
 	return 0;
 }

@@ -11,6 +11,7 @@
 #include <parser.h>
 #include "ast_optimize.h"
 #include "compiler.h"
+#include "tac_optimize.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -254,4 +255,16 @@ static void debug_dump_ctx(compiler &ctx) {
 	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
 }
 
+static void debug_dump_ctx(tacoptimizecontext &ctx) {
+	// First, print out all of the functions
+	
+	for (auto &[name, stp] : ctx.func_compileunits) {
+		if (stp.start == nullptr) continue;
+		std::cout << name << ":" << std::endl;
+		print_statement_list(stp.start);
+	}
+
+	std::cout << "$GLOBAL:" << std::endl;
+	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
+}
 #endif

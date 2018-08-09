@@ -152,13 +152,12 @@ void call_trav_func(T&&f, statement * s, int i) {
 template<typename T>
 static void traverse_f(statement *s, T&& f) {
 	std::priority_queue<std::pair<int, statement *>> to_read{};
-	std::unordered_set<statement *> visited{};
+	std::unordered_set<statement *> visited{nullptr};
 	to_read.push({2, s});
 	int index = 0;
 
 	while (!to_read.empty()) {
 		auto [_, v] = to_read.top();
-		if (v->t == st_type::ret && v->next != nullptr) std::cerr << "AAAAAAA" << std::endl;
 		if (visited.count(v) != 0) {to_read.pop(); continue;}
 		visited.insert(v);
 		call_trav_func(f, v, index++);
