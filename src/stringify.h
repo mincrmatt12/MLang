@@ -192,12 +192,15 @@ static void val_print(const statement &s) {
 }
 
 static void print_statement_list(statement * start) {
-	auto indices = traverse(start); // Get the canonical order of all of these things.
+	auto indices = std::map<statement *, int>{}; // Get the canonical order of all of these things.
 	auto labels  = std::map<int, int>{};
 	auto trav    = std::map<int, statement *>{};
 
 	// Create a reverse lookup for iteration
-	for (auto &[k, v] : indices) trav[v] = k;
+	traverse_f(start, [&](statement *G, int I){
+			indices[G] = I;
+			trav   [I] = G;
+	});
 
 	auto add_label = [&, l=0](int i) mutable {
 		if (labels.count(i) == 0) {

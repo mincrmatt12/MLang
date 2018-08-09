@@ -129,8 +129,28 @@ struct compilation_unit {
 //
 // Creates a map of statements to indices representing the order in which they will be written in a stream
 // Traverses all next pointers first followed by cond pointers in a breadth first system
-static std::map<statement *, int> traverse(statement *s) {
-	std::map<statement *, int> result{};
+
+template<typename T, typename = void>
+struct call_trav_func_t {
+	inline void operator()(T&&f, statement * s, int i) {
+		f(s);
+	}	
+};
+
+template<typename T>
+struct call_trav_func_t<T, std::void_t<decltype(std::declval<T>()(std::declval<statement *>(), 0))>>{
+	inline void operator()(T&&f, statement * s, int i) {
+		f(s, i);
+	}
+};
+
+template<typename T>
+void call_trav_func(T&&f, statement * s, int i) {
+	call_trav_func_t<T>()(std::forward<T>(f), s, i);
+}
+
+template<typename T>
+static void traverse_f(statement *s, T&& f) {
 	std::priority_queue<std::pair<int, statement *>> to_read{};
 	std::unordered_set<statement *> visited{};
 	to_read.push({2, s});
@@ -141,13 +161,17 @@ static std::map<statement *, int> traverse(statement *s) {
 		if (v->t == st_type::ret && v->next != nullptr) std::cerr << "AAAAAAA" << std::endl;
 		if (visited.count(v) != 0) {to_read.pop(); continue;}
 		visited.insert(v);
-		result[v] = index++;
+		call_trav_func(f, v, index++);
 		to_read.pop();
 
 		if (v->next != nullptr) to_read.push({1, v->next});
 		if (v->cond != nullptr) to_read.push({0, v->cond});
 	}
+}
 
+static std::vector<statement *> traverse_v(statement *s) {
+	std::vector<statement *> result{};
+	traverse_f(s, [&](statement *t){result.push_back(t);});
 	return result;
 }
 
