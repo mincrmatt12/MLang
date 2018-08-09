@@ -176,6 +176,7 @@ static void val_print(const addr_ref &r) {
 			val_print(r.ident);
 			break;
 	}
+	val_print(r.rt);
 }
 
 static void val_print(const statement &s) {

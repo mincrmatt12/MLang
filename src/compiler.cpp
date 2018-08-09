@@ -78,13 +78,13 @@ addr_ref compiler::compile(const expression &expr) {
 	// Sets the tgt pointer to the next poitner, and sets the parameter to deref of tgt, so tgt (next) = s, tgt = s->next.
 	auto append = [&](statement *s) {for (*currently_compiling->tgt = s; s != nullptr; s = *currently_compiling->tgt) currently_compiling->tgt = &s->next; };
 	// make() create a new unnamed register for expression usages
-	auto make =   [&]()		{return addr_ref(ar_type::reg, currently_compiling->counter++);};
+	auto make =   [&](ex_rtype &&t)	{return addr_ref(ar_type::reg, currently_compiling->counter++, std::forward<ex_rtype>(t));};
 
 	addr_ref result{};
 
 	switch (expr.t) {
 		case ex_type::string_ref:
-			append(s_str(result = make()));
+			append(s_str(result = make({})));
 			append(s_add(result, result, addr_ref{ar_type::num, string_table.find(expr.strvalue + '\0')}));
 			break;	
 		case ex_type::ident:
@@ -97,10 +97,10 @@ addr_ref compiler::compile(const expression &expr) {
 						 result = addr_ref(expr.ident);
 						 break;
 					case id_type::local_var:
-						 result = addr_ref(ar_type::reg, currently_compiling->num_params + expr.ident.index);
+						 result = addr_ref(ar_type::reg, currently_compiling->num_params + expr.ident.index, expr.get_type());
 						 break;
 					case id_type::parameter:
-						 result = addr_ref(ar_type::reg, expr.ident.index);
+						 result = addr_ref(ar_type::reg, expr.ident.index, expr.get_type());
 						 break;
 				}
 				break;
@@ -110,17 +110,17 @@ addr_ref compiler::compile(const expression &expr) {
 			result = addr_ref(ar_type::num, is_nop(expr) ? 0l : expr.numvalue);
 			break;
 		case ex_type::deref:
-			append(s_read(result   = make(), compile(expr.params.front())));
+			append(s_read(result   = make(expr.get_type()), compile(expr.params.front())));
 			break;
 		case ex_type::neg:
-			append(s_neg(result    = make(), compile(expr.params.front())));
+			append(s_neg(result    = make(expr.get_type()), compile(expr.params.front())));
 			break;
 		case ex_type::ret:
 			append(s_ret(result    =         compile(expr.params.front())));
 			std::cout << "CC" << std::endl;
 			break;
 		case ex_type::addr:
-			append(s_addrof(result = make(), compile(expr.params.front())));
+			append(s_addrof(result = make(expr.get_type()), compile(expr.params.front())));
 			break;
 
 		case ex_type::add:
@@ -133,11 +133,11 @@ addr_ref compiler::compile(const expression &expr) {
 			{
 				for (auto &e : expr.params) {
 					if (addr_ref prev = result, last = result = compile(e); prev.t != ar_type::unknown) {
-						if (is_add(expr))      { append(s_add(result = make(), prev, last)); }
-						else if (is_mul(expr)) { append(s_mul(result = make(), prev, last)); }
-						else if (is_div(expr)) { append(s_div(result = make(), prev, last)); }
-						else if (is_eq(expr))  { append(s_eq(result = make(), prev, last)); }
-						else if (is_gt(expr))  { append(s_gt(result = make(), prev, last)); }
+						if (is_add(expr))      { append(s_add(result = make(expr.get_type()), prev, last)); }
+						else if (is_mul(expr)) { append(s_mul(result = make(expr.get_type()), prev, last)); }
+						else if (is_div(expr)) { append(s_div(result = make(expr.get_type()), prev, last)); }
+						else if (is_eq(expr))  { append(s_eq(result = make(expr.get_type()), prev, last)); }
+						else if (is_gt(expr))  { append(s_gt(result = make(expr.get_type()), prev, last)); }
 						else                   { result = last; }
 					}
 				}
@@ -158,7 +158,7 @@ addr_ref compiler::compile(const expression &expr) {
 			{
 				// First, compile the target expression that will be called
 				std::vector<addr_ref> parameters{};
-				parameters.push_back(result = make());
+				parameters.push_back(result = make({}));
 				for (auto i = expr.params.begin(); i != expr.params.end(); ++i) {
 					parameters.emplace_back(std::move(compile(*i)));
 				}
@@ -174,7 +174,7 @@ addr_ref compiler::compile(const expression &expr) {
 			{
 				const bool is_and = !is_l_or(expr);
 
-				result = make();
+				result = make(expr.get_type());
 				// Make three statements:
 				// Then, else and a common target
 				statement* b_then = s_mov(result, addr_ref{ar_type::num, is_and ? 1l : 0l});
@@ -198,6 +198,20 @@ addr_ref compiler::compile(const expression &expr) {
 				currently_compiling->tgt  = &end->next;
 			}
 			break;
+		case ex_type::cast:
+			{
+				// Special stuff. First, check if the operand is a literal. We can store it directly in the desired type if so.
+				if (is_literal_number(expr.params.front())) {
+					// Simply generate a constant move into the result
+					append(s_mov(result = make(std::move(ex_rtype(expr.castvalue))), addr_ref(ar_type::num, expr.params.front().numvalue, std::move(ex_rtype(expr.castvalue)))));
+					break;
+				}
+
+				// Otherwise generate the cast instruction. This is pretty much the same as a mov but creates additional
+				// code to handle the type switch
+				append(s_cast(result = make(std::move(ex_rtype(expr.castvalue))), compile(expr.params.front())));
+				break;
+			}
 	}
 	
 	if (result.t == ar_type::unknown) {

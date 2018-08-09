@@ -19,7 +19,6 @@ void astoptimizecontext::find_pure_funcs() {
 		// count these returns, if anything is marked it returns true causing us to loop again
 		
 		if (purity.count(f.name) != 0) return false;
-		std::cout << "pure checking " << f.name << std::endl;
 
 		bool unchecked_encountered = false;
 
@@ -503,6 +502,17 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 					}
 				}
 			}
+		}
+	}
+
+	// Optimize situations where a cast is taken to the type
+	// which is the same as the result of the casted expr
+	if (is_cast(e)) {
+		if (e.castvalue == e.params.front().get_type()) {
+			++modifications;
+			// Remove the cast
+			std::cout << "removing redundant cast" << std::endl;
+			e = expression(std::move(e.params.front()));
 		}
 	}
 	return modifications;

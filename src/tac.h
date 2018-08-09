@@ -35,14 +35,16 @@ struct addr_ref {
 	ar_type t{ar_type::unknown};
 	long num=0;
 	identifier ident{};
+	ex_rtype rt{64, false};
 	
 	addr_ref() = default;
 
-	template<typename T>
-	addr_ref(ar_type t_, T&& p) : addr_ref(std::forward<T>(p))  { t = t_; } 
+	template<typename ...T>
+	addr_ref(ar_type t_, T&& ...p) : addr_ref(std::forward<T>(p)...)  { t = t_;} 
 	
 	addr_ref(long n) : num(n) {}
-	addr_ref(identifier i) : ident(i) {t = ar_type::ident;}
+	addr_ref(long n, ex_rtype &&t) : num(n), rt(t) {}
+	addr_ref(identifier i) : ident(i) {t = ar_type::ident; rt = ex_rtype(i.t);}
 };
 
 #define o(n) \
@@ -67,7 +69,8 @@ ENUM_ADDR_REFS(o)
 	o(fcall) o(ret) \
 	o(addrof) /* get the physical address of p1 and put it into p0. should be implemented with a simple constant store at the compile level */ \
 	o(str) /* kludge to get a pointer to the string table and place it into the target. if constants are added they will be stored with this type 
-		  after it is renamed */
+		  after it is renamed */ \
+	o(cast)
 
 #define o(n) n, 
 enum struct st_type {
