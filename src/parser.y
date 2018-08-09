@@ -425,13 +425,13 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '>' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_gt(M($1), M($3));}
     | expr "<=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_gt(M($1), M($3)), 0l);}
     | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
-    					  else {$$ = C($1) %= e_add(M($1), M($3)); } }
+    					  else {$$ = C($1) %= e_add(C($1), M($3)); } }
     | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
-    					  else {$$ = C($1) %= e_add(M($1), e_neg(M($3))); } }
+    					  else {$$ = C($1) %= e_add(C($1), e_neg(M($3))); } }
     | expr "*=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_mul(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
-    					  else {$$ = C($1) %= e_mul(M($1), M($3)); }}
+    					  else {$$ = C($1) %= e_mul(C($1), M($3)); }}
     | expr "/=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
-    					  else {$$ = C($1) %= e_div(M($1), M($3)); } }
+    					  else {$$ = C($1) %= e_div(C($1), M($3)); } }
     | expr "||" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_or(M($1), M($3));}
     | expr "&&" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_and(M($1), M($3));}
     | expr "==" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(M($1), M($3)); }
@@ -625,7 +625,6 @@ ex_rtype expression::get_type() const {
 				else {
 					if (params.size() == 0) return {64, false};
 					auto a = params.front().get_type();
-					if (a.size <= 32) a.size *= 2;
 					return a;
 				}
 			}
@@ -640,7 +639,6 @@ ex_rtype expression::get_type() const {
 				else {
 					if (params.size() == 0) return {64, false};
 					auto a = params.front().get_type();
-					if (a.size >= 8) a.size /= 2;
 					return a;
 				}
 			}
