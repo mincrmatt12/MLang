@@ -1,4 +1,5 @@
 cmake-build-*
 compile_commands.json
 .idea/
-a.png
+*.png
+!*/*.png
