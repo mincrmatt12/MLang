@@ -1,6 +1,6 @@
 // hard
 strlen(b) = {
-	var len = 0;
+	var 64 len = 0;
 	while (*b++ != 0) ++len;
 	return len;
 }

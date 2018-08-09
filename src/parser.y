@@ -272,6 +272,7 @@ public:
 	/* def* defines stuff */
 
 	expression temp()				{return defvar("$T" + std::to_string(tempvar_count++), std::move(ex_rtype{ 64, false }));}
+	expression temp(ex_rtype &&t)			{return defvar("$T" + std::to_string(tempvar_count++), t);}
 
 	expression use_name(const std::string& name) {
 		for (auto j = scopes.crbegin(); j != scopes.crend(); ++j) {
@@ -410,26 +411,26 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '+' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), M($3));}
     | expr '-' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), e_neg(M($3)));}
     | expr '*' expr       %prec '/'	{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_mul(M($1), M($3));}
-    | expr '%' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
-    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
+    | expr '%' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(C($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
 					}
     | expr '/' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_div(M($1), M($3));}
-    | expr '<' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
-    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
+    | expr '<' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3))), 0l)); }
-    | expr ">=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
-    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp() %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
+    | expr ">=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
+    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3)))); }
     | expr '>' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_gt(M($1), M($3));}
     | expr "<=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_gt(M($1), M($3)), 0l);}
-    | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(M($1), M($3)); } }
-    | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
+    | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(M($1), e_neg(M($3))); } }
-    | expr "*=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_mul(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "*=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_mul(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_mul(M($1), M($3)); }}
-    | expr "/=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "/=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_div(M($1), M($3)); } }
     | expr "||" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_or(M($1), M($3));}
     | expr "&&" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_and(M($1), M($3));}
@@ -439,15 +440,15 @@ expr: STR_CONST				{ $$ = M($1);}
     | '*' expr            %prec '&'	{ $$ = e_deref(M($2));}
     | '-' expr            %prec '&'	{ $$ = e_neg(M($2));}
     | '!' expr            %prec '&'	{ $$ = e_eq(M($2)); $$.params.push_back(cast(0l, ex_rtype($$.params.front().get_type())));}
-    | "++" expr				{ if ($2.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), 1l)) %= e_deref(a.params.back());}
+    | "++" expr				{ if ($2.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($2.get_type(), true))) %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), 1l)) %= e_deref(a.params.back());}
     					  else {$$ = C($2) %= e_add(M($2), 1l); }}
-    | "--" expr           %prec "++"	{ if ($2.has_side_effects()) {auto a = ctx.temp() %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), -1l)) %= e_deref(a.params.back());}
+    | "--" expr           %prec "++"	{ if ($2.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($2.get_type(), true))) %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), -1l)) %= e_deref(a.params.back());}
     					  else {$$ = C($2) %= e_add(M($2), -1l); }}
-    | expr "++"				{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), 1l), M(t)); }
-    | expr "--"           %prec "++"	{ if ($1.has_side_effects()) { $$ = ctx.temp() %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), e_neg(1l)), M(t)); }
-    | expr '?' expr ':' expr		{ auto t = ctx.temp(); $$ = e_comma(e_l_or(e_l_and(M($1), e_comma(C(t) %= M($3), 1l)), C(t) %= M($5)), C(t));};
+    | expr "++"				{ if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref($$.params.back());}
+    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), 1l), M(t)); }
+    | expr "--"           %prec "++"	{ if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref($$.params.back());}
+    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), e_neg(1l)), M(t)); }
+    | expr '?' expr ':' expr		{ ensure_cast($3, $5); ensure_cast($5, $3); auto t = ctx.temp(M(ex_rtype($3.get_type()))); $$ = e_comma(e_l_or(e_l_and(M($1), e_comma(C(t) %= M($3), 1l)), C(t) %= M($5)), C(t));};
 %%
 
 yy::mlang_parser::symbol_type yy::yylex(parsecontext& ctx) {
@@ -568,7 +569,7 @@ ex_rtype expression::get_type() const {
 		case ex_type::string_ref:
 			return {};
 		case ex_type::literal_number:
-			return {64, false};
+			return {numvalue < 256 ? 8u : 64u, false};
 		case ex_type::ident:
 			return ident.t;
 		case ex_type::nop:
