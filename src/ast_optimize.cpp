@@ -465,9 +465,12 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 	
 	if (is_cast(e)) {
 		if (is_cast(e.params.front())) {
-			++modifications;
-			e = expression(std::move(e.params.front()));
-			std::cout << "simplified nested casts" << std::endl;
+			auto size = [](const ex_rtype& r){return r.ptr != nullptr ? 64 : r.size;};
+				if (size(e.castvalue) == size(e.params.front().castvalue)) {
+				++modifications;
+				e = expression(std::move(e.params.front()));
+				std::cout << "simplified nested casts" << std::endl;
+			}
 		}
 	}
 
