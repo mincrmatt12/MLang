@@ -63,6 +63,7 @@ private:
 		}
 		else {
 			int i = 0;
+			where->for_all_write([&](auto){++i;});
 			where->for_all_read([&](auto &reg) {
 					int index = i++;
 

@@ -462,13 +462,13 @@ expr: STR_CONST				{ $$ = M($1);}
     | '-' expr            %prec '&'	{ $$ = e_neg(M($2));}
     | '!' expr            %prec '&'	{ $$ = e_eq(M($2)); $$.params.push_back(cast(0l, ex_rtype($$.params.front().get_type())));}
     | "++" expr				{ if ($2.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($2.get_type(), true))) %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), 1l)) %= e_deref(a.params.back());}
-    					  else {$$ = C($2) %= e_add(M($2), 1l); }}
+    					  else {$$ = C($2) %= e_add(C($2), cast(1l, $2.get_type())); }}
     | "--" expr           %prec "++"	{ if ($2.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($2.get_type(), true))) %= e_addr(M($2)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), -1l)) %= e_deref(a.params.back());}
-    					  else {$$ = C($2) %= e_add(M($2), -1l); }}
+    					  else {$$ = C($2) %= e_add(C($2), cast(-1l, $2.get_type())); }}
     | expr "++"				{ if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), 1l), M(t)); }
+    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), cast(1l, $1.get_type())), M(t)); }
     | expr "--"           %prec "++"	{ if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref($$.params.back());}
-    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), e_neg(1l)), M(t)); }
+    					  auto t = ctx.temp(M(ex_rtype($1.get_type()))); $$ = e_comma(M($$), C(t) %= C($1), C($1) %= e_add(C($1), cast(-1l, $1.get_type())), M(t)); }
     | expr '?' expr ':' expr		{ ensure_cast($3, $5); ensure_cast($5, $3); auto t = ctx.temp(M(ex_rtype($3.get_type()))); $$ = e_comma(e_l_or(e_l_and(M($1), e_comma(C(t) %= M($3), 1l)), C(t) %= M($5)), C(t));};
 %%
 

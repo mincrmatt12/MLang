@@ -147,7 +147,7 @@ addr_ref compiler::compile(const expression &expr) {
 		case ex_type::assign:
 			{
 				// Compile in the right order, and make sure we can do *a = write
-				if (const auto& src = expr.params.front(), &dest = expr.params.back(); is_deref(src)) {
+				if (const auto& src = expr.params.front(), &dest = expr.params.back(); is_deref(dest)) {
 					result = compile(src); append(s_write(compile(dest.params.front()), result));
 				}
 				else {

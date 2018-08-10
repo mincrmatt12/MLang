@@ -1,4 +1,5 @@
 #include "tac_optimize.h"
+#include <cmath>
 #include "flow.h"
 
 tacoptimizecontext::tacoptimizecontext(compiler &&c) {
@@ -16,7 +17,8 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 	while (
 			optimize_deadcode() ||
 			optimize_jumpthread() ||
-			optimize_deduplicate()
+			optimize_deduplicate() ||
+			optimize_copyelision()
 	) {}
 }
 
@@ -98,6 +100,71 @@ int  tacoptimizecontext::optimize_deduplicate() {
 			used.push_back(s);
 		}
 	}
+
+	return modifications;
+}
+
+int  tacoptimizecontext::optimize_copyelision() {
+	int modifications = 0;
+
+	// First, try and remove useless casts.
+	// A useless cast is defined like this:
+	//
+	// Any cast statement who's only sources are mov statements with literals
+	// and where all of those mov sources are only ever read by the cast.
+	//
+	// e.g:
+	//
+	// mov r5<16> #0<16>
+	// cast r7<64> r5<16>
+	// 
+	// We also must do nessecary operations on the literal value to simulate
+	// the cast from the old type to the new type if it is smaller.
+	
+	auto info = access_info(*optimizing, false, false);
+
+	traverse_f(optimizing->start, [&](statement *s){
+			// Check if this is a cast.
+			if (si_cast(*s) && ai_reg(s->rhs())) {
+				// Check the access info: Where does the parameter come from?
+				if (std::all_of(info.data[s].parameters[1].begin(), info.data[s].parameters[1].end(), [&](auto &source){
+					auto b_ = std::get_if<statement *>(&source);
+					if (b_ == nullptr) return false;
+					auto b = *b_;
+					auto &d = info.data[b].parameters[0];
+					return si_mov(*b) && ai_num(b->rhs()) && d.size() == 1 && std::all_of(d.begin(), d.end(), [&](auto &source2){
+							return std::get_if<statement *>(&source2) != nullptr && *std::get_if<statement *>(&source2) == s;
+					});
+				})) {
+					// Ok! All sources of this cast are movs and all uses of the movs are this cast only. This means we can convert the literal types
+					// inside of the movs to the right types and change the registers to this one's store.
+					
+					// Grab the new target register
+					addr_ref tgt = s->lhs();
+					ex_rtype lit_type = s->lhs().rt;
+					++modifications;
+					int new_size = lit_type.ptr == nullptr ? lit_type.size : 64;
+
+					for (auto &source : info.data[s].parameters[1]) {
+						auto mov_stmt = *std::get_if<statement *>(&source);
+						ex_rtype old_type = mov_stmt->rhs().rt;
+
+						// Simulate the downcasting if applicable
+						mov_stmt->rhs().num &= (1<<new_size)-1;
+						
+						// Change this mov statements rhs type to the lit_type
+						mov_stmt->rhs().rt = ex_rtype(lit_type);
+						// Change the target of the mov to tgt
+						mov_stmt->lhs() = addr_ref(tgt);
+						
+						std::cout << "simplified a useless cast" << std::endl;
+					}
+
+					s->make_nop();
+				}
+			}
+	});
+
 
 	return modifications;
 }
