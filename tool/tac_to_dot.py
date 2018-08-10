@@ -68,4 +68,4 @@ for i in nodes:
 for i in edges:
     g.add_edge(i)
 
-g.write_png("a.png")
+g.write_png("a.png" if len(sys.argv) < 2 else sys.argv[1])
