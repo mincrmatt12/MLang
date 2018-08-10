@@ -31,6 +31,8 @@ void tacoptimizecontext::optimize() {
 int  tacoptimizecontext::optimize_deadcode() {
 	int modifications = 0;
 
+	auto info = access_info(*optimizing, false, false);
+
 	// Generate a tree traversal.
 	// Go through ~to ALL THE WORLD~ and find nops and remove them
 	
@@ -52,6 +54,25 @@ int  tacoptimizecontext::optimize_deadcode() {
 			s->next = nullptr;
 			++modifications;
 			std::cout << "stubbed a ret" << std::endl;
+		}
+		if (!s->has_side_effects()) {
+			// Check if s writes to something which is never read from
+			std::size_t writes_with_no_reason = 0;
+			std::size_t index = 0;
+			s->for_all_write([&](addr_ref &f){
+					if (ai_reg(f)){
+						if (info.data[s].parameters[index++].empty()) {
+							// No-one recalls reading this value
+							++writes_with_no_reason;
+						}	
+					}
+			});
+			if (writes_with_no_reason) {
+				// We have reached peak stupidity, replace this with a bloody nop for christ's sake.
+				s->make_nop();
+				++modifications;
+				std::cout << "removed dead store" << std::endl;
+			}
 		}
 	});
 
@@ -111,6 +132,12 @@ int  tacoptimizecontext::optimize_jumpthread() {
 				s->next = s->lhs().num ? s->cond : s->next;
 				s->make_nop();
 				std::cout << "literal ifnz hardcoded (type 1)" << std::endl;
+				++modifications;
+			}
+
+			while (si_ifnz(*s) && s->next == s->cond) {
+				s->make_nop();
+				std::cout << "redundant ifnz removed" << std::endl;
 				++modifications;
 			}
 

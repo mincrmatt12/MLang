@@ -127,6 +127,20 @@ struct statement {
 	bool operator==(const statement& s) {
 		return s.next == next && cond == s.cond && t == s.t && params == s.params;
 	}
+
+	bool has_side_effects() {
+		switch (t) {
+			case st_type::write:
+			case st_type::ret:
+			case st_type::ifnz:
+			case st_type::fcall:
+				return true;
+			default:
+				std::size_t side_effects = 0;
+				for_all_write([&](addr_ref &r){if (ai_ident(r)) ++side_effects;});
+				return side_effects;
+		}
+	}
 };
 
 #define o(n) \

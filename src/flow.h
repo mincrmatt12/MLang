@@ -45,9 +45,9 @@ private:
 				changes += mydata.everything[r].insert(s).second;
 			}
 		}
+		if (!changes) return;
 
 		if (follow_copies && (si_mov(*where) || si_cast(*where))) {
-			if (!changes) return;
 
 			// make sure both arguments are registers
 			if (ai_reg(where->lhs()) && ai_reg(where->rhs())) {
@@ -85,11 +85,11 @@ private:
 
 							return mydata.parameters[index].insert(source).second;
 					});
-					if (!changes) return;
-					where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
-
-					if (include_ifnz && si_ifnz(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
 			});
+			if (!changes) return;
+			where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
+
+			if (include_ifnz && si_ifnz(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
 		}
 
 		if (where->cond != nullptr) {
