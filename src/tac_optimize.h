@@ -32,6 +32,7 @@ struct tacoptimizecontext {
 	// memory footprint
 	
 	int optimize_deadcode();  //  removes nops && code after rets
+	int optimize_jumpthread();
 };
 
 #endif // TAC_OPTIMIZE_H

@@ -108,6 +108,7 @@ addr_ref compiler::compile(const expression &expr) {
 		case ex_type::literal_number:
 		case ex_type::nop:
 			result = addr_ref(ar_type::num, is_nop(expr) ? 0l : expr.numvalue);
+			result.rt = {result.num < 256 ? 8u : 64u, false};
 			break;
 		case ex_type::deref:
 			append(s_read(result   = make(expr.get_type()), compile(expr.params.front())));

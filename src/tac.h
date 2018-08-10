@@ -45,6 +45,23 @@ struct addr_ref {
 	addr_ref(long n) : num(n) {}
 	addr_ref(long n, ex_rtype &&t) : num(n), rt(t) {}
 	addr_ref(identifier i) : ident(i) {t = ar_type::ident; rt = ex_rtype(i.t);}
+
+	bool operator==(const addr_ref& other) const {
+		if (!(other.t == t)) return false;
+		if (t == ar_type::num || t == ar_type::reg) {
+			return num == other.num && rt == other.rt;
+		}
+		else {
+			return ident == other.ident && rt == other.rt;
+		}
+	}
+	bool operator<(const addr_ref& other) const {
+		return std::tie(t, num, ident, rt) < std::tie(other.t, other.num, other.ident, other.rt);	
+	}
+
+	bool is_volatile() const {
+		return t == ar_type::ident && ident.type == id_type::global_var;
+	};
 };
 
 #define o(n) \
@@ -88,6 +105,24 @@ struct statement {
 	statement(st_type t_, T&&... args) : t(t_), params{std::forward<T>(args)...} {}
 
 	statement(st_type t_, std::vector<addr_ref> args) : t(t_) {params = std::move(args);}
+
+	addr_ref& lhs() {return params.front();}
+	addr_ref& rhs() {return params.back();}
+
+	template<typename ...T>
+	void reinit(T&&... r) {
+		auto n = next;
+		*this = statement(std::forward<T>(r)...);
+		next = n;
+	}
+
+	void make_nop() {reinit(st_type::nop);}
+	
+	template<typename T>
+	void for_all_write(T&& f);
+
+	template<typename T>
+	void for_all_read(T&& f);
 };
 
 #define o(n) \
@@ -174,4 +209,46 @@ static std::vector<statement *> traverse_v(statement *s) {
 	return result;
 }
 
+template<typename T, typename = decltype(std::declval<T>()(std::declval<addr_ref&>()))>
+void call_reg_func(T&& f, addr_ref &r) {
+	f(r);
+}
+template<typename T, typename, typename Iterator=decltype(std::declval<statement>().params.begin())>
+void call_reg_func(T&& f, Iterator&& begin, Iterator& end) {
+	for (;begin != end;++begin) {
+		f(*begin);
+	}
+}
+
+template<typename T>
+void statement::for_all_read(T&& f) {
+	switch (t) {
+		case st_type::nop:
+		case st_type::str:
+			return;
+		case st_type::write:
+		case st_type::ret:
+		case st_type::ifnz:
+			call_reg_func(f, params.begin(), params.end());
+			return;
+		default:
+			call_reg_func(f, std::next(params.begin()), params.end());
+			return;
+	}
+} 
+
+template<typename T>
+void statement::for_all_write(T&& f) {
+	switch (t) {
+		case st_type::nop:
+		case st_type::write:
+		case st_type::ret:
+		case st_type::ifnz:
+			return;
+		default:
+			call_reg_func(f, params.front());
+			return;
+
+	}
+} 
 #endif

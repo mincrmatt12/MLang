@@ -73,12 +73,18 @@ struct ex_rtype {
 	bool operator==(const ex_rtype &e) const {
 		if (ptr != nullptr) {
 			if (e.ptr == nullptr) return false;
-			return e.size == size && *e.ptr == *ptr;
+			return *e.ptr == *ptr;
 		}
 		else {
-			if (ptr != nullptr) return false;
+			if (e.ptr != nullptr) return false;
 			return e.size == size;
 		}
+	}
+	bool operator!=(const ex_rtype &e) const {
+		return !operator==(e);
+	}
+	bool operator<(const ex_rtype &e) const {
+		return std::tie(ptr, size) < std::tie(e.ptr, e.size);
 	}
 };
 
@@ -87,6 +93,17 @@ struct identifier {
 	std::size_t index = 0; // index for func/parameter/scopevar/globvar
 	std::string name; // name + linker name for extern_function
 	ex_rtype t{};
+
+	bool operator==(const identifier &i) const {
+		return type == i.type &&
+			index == i.index &&
+			name == i.name &&
+			t == i.t;
+	}
+
+	bool operator!=(const identifier &i) const {
+		return !operator==(i);
+	}
 };
 
 #define ENUM_EXPRESSIONS(o) \

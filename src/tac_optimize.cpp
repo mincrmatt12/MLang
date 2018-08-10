@@ -13,7 +13,8 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 
 	std::cout << "optimizing" << std::endl;
 	while (
-			optimize_deadcode()
+			optimize_deadcode() ||
+			optimize_jumpthread()
 	) {}
 }
 
@@ -50,6 +51,51 @@ int  tacoptimizecontext::optimize_deadcode() {
 			++modifications;
 			std::cout << "stubbed a ret" << std::endl;
 		}
+	});
+
+	return modifications;
+}
+
+int  tacoptimizecontext::optimize_jumpthread() {
+	int modifications = 0;
+
+	traverse_f(optimizing->start, [&](statement *s){
+			// Check if the pointed at statement is an ifnz, and the next statement is an ifnz, and the parameters are the same
+			while (si_ifnz(*s) && s->next != nullptr && si_ifnz(*s->next) && s->lhs() == s->next->lhs() && !s->lhs().is_volatile()
+					&& s->next != s->next->next) {
+				// next pointer is only executed if condition is false, the condition is always
+				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
+				// from the first statement
+				std::cout << "ifnz threaded";
+				++modifications;
+				s->next = s->next->next;
+			}
+			while (si_ifnz(*s) && s->cond != nullptr && si_ifnz(*s->cond) && s->lhs() == s->cond->lhs() && !s->lhs().is_volatile()
+					&& s->cond != s->cond->cond) {
+				// next pointer is only executed if condition is false, the condition is always
+				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
+				// from the first statement
+				std::cout << "ifnz threaded";
+				++modifications;
+				s->cond = s->cond->cond;
+			}
+
+			// Check if the ifnz has a literal condition
+			while (si_ifnz(*s) && ai_num(s->lhs())) {
+				// hardcode the jump
+				s->next = s->lhs().num ? s->cond : s->next;
+				s->make_nop();
+				std::cout << "literal ifnz hardcoded (type 1)" << std::endl;
+				++modifications;
+			}
+
+			while ((si_mov(*s) || si_cast(*s)) && s->next != nullptr && si_ifnz(*s->next) && ai_num(s->rhs()) && s->lhs() == s->next->lhs()) {
+				// hardcode our next with the result of of the ifnz
+				s->next = s->rhs().num ? s->next->cond : s->next->next;
+				std::cout << "literal ifnz hardcoded (type 2)" << std::endl;
+				++modifications;
+			}
+
 	});
 
 	return modifications;
