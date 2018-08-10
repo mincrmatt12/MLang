@@ -33,6 +33,7 @@ struct tacoptimizecontext {
 	
 	int optimize_deadcode();  //  removes nops && code after rets
 	int optimize_jumpthread();
+	int optimize_deduplicate();
 };
 
 #endif // TAC_OPTIMIZE_H

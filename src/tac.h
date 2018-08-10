@@ -123,6 +123,10 @@ struct statement {
 
 	template<typename T>
 	void for_all_read(T&& f);
+	
+	bool operator==(const statement& s) {
+		return s.next == next && cond == s.cond && t == s.t && params == s.params;
+	}
 };
 
 #define o(n) \
@@ -209,12 +213,12 @@ static std::vector<statement *> traverse_v(statement *s) {
 	return result;
 }
 
-template<typename T, typename = decltype(std::declval<T>()(std::declval<addr_ref&>()))>
+template<typename T>
 void call_reg_func(T&& f, addr_ref &r) {
 	f(r);
 }
-template<typename T, typename, typename Iterator=decltype(std::declval<statement>().params.begin())>
-void call_reg_func(T&& f, Iterator&& begin, Iterator& end) {
+template<typename T, typename Iterator=decltype(std::declval<statement>().params.begin())>
+void call_reg_func(T&& f, Iterator begin, Iterator end) {
 	for (;begin != end;++begin) {
 		f(*begin);
 	}

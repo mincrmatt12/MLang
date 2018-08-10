@@ -104,6 +104,10 @@ struct identifier {
 	bool operator!=(const identifier &i) const {
 		return !operator==(i);
 	}
+
+	bool operator<(const identifier &i) const {
+		return std::tie(type, index, name, t) < std::tie(i.type, i.index, i.name, i.t);
+	}
 };
 
 #define ENUM_EXPRESSIONS(o) \

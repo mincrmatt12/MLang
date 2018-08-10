@@ -1,4 +1,5 @@
 #include "tac_optimize.h"
+#include "flow.h"
 
 tacoptimizecontext::tacoptimizecontext(compiler &&c) {
 	all_statements = std::move(c.all_statements);
@@ -14,7 +15,8 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 	std::cout << "optimizing" << std::endl;
 	while (
 			optimize_deadcode() ||
-			optimize_jumpthread()
+			optimize_jumpthread() ||
+			optimize_deduplicate()
 	) {}
 }
 
@@ -52,6 +54,29 @@ int  tacoptimizecontext::optimize_deadcode() {
 			std::cout << "stubbed a ret" << std::endl;
 		}
 	});
+
+	return modifications;
+}
+
+int  tacoptimizecontext::optimize_deduplicate() {
+	int modifications = 0;
+
+	std::list<statement *> used;
+	// Iterate over the entire tree, searching for identical instructions and adding them to a multimap
+	// YES I KNOW THIS IS CRAPPY
+	for (auto &s : traverse_v(optimizing->start)) {
+		// check if s is equal to something in used
+		if (auto i = std::find_if(used.begin(), used.end(), [&](auto &a){return *a == *s;}); i != used.end()) {
+			// the statement is already used in exactly the same form. convert s into a nop and set its next to the deduplicated
+			s->make_nop();
+			s->next = *i;
+			++modifications;
+			std::cout << "deduplicated code" << std::endl;
+		}
+		else {
+			used.push_back(s);
+		}
+	}
 
 	return modifications;
 }

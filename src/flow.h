@@ -69,7 +69,7 @@ private:
 					if (!ai_reg(reg)) return;
 					int regno = reg.num;
 					changes += std::count_if(state[regno].begin(), state[regno].end(), [&](const auto& source){
-							auto writer_ = std::get_if<statement *>(source);
+							auto writer_ = std::get_if<statement *>(&source);
 							auto writer = writer_ == nullptr ? nullptr : *writer_;
 							int i2 = 0;
 
@@ -78,7 +78,7 @@ private:
 									int index2 = i2++;
 									if (reg2 == reg) {
 										++changes;
-										data[writer].params[index2].insert(where);
+										data[writer].parameters[index2].insert(where);
 									}
 								});
 							}
