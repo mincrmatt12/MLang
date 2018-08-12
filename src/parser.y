@@ -584,7 +584,6 @@ bool expression::is_compiletime_expr() const {
 			return false;
 	}
 }
-
 ex_rtype expression::get_type() const {
 	switch (t) {
 		case ex_type::string_ref:
@@ -663,6 +662,5 @@ ex_rtype expression::get_type() const {
 					return a;
 				}
 			}
-
 	}
 }
