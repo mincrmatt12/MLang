@@ -37,6 +37,8 @@ struct tacoptimizecontext {
 	int optimize_copyelision();
 	int optimize_simplify();
 	int optimize_rename(); // renames registers to use less of them
+
+	void remove_register_holes(); // not an optimizer as it is only ran once for the entire cu
 };
 
 #endif // TAC_OPTIMIZE_H

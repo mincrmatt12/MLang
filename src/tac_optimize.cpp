@@ -27,6 +27,7 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 			optimize_simplify() || 
 			optimize_rename()
 	) {}
+	remove_register_holes();
 }
 
 void tacoptimizecontext::optimize() {
@@ -735,4 +736,44 @@ int tacoptimizecontext::optimize_rename() {
 	}
 
 	return modifications;
+}
+
+void tacoptimizecontext::remove_register_holes() {
+	// This function walks through the entire tree, working out which registers are never written to. It then goes through the tree again, but
+	// modifies all references to any hole+1 to the hole by looking it up in a map.
+	
+	int remaps;
+	do {
+		remaps = 0;
+		std::set<int> regnums;
+		
+		auto traversal = traverse_v(optimizing->start);
+		for (auto &stmt : traversal) {
+			for (auto &param : stmt->params) {
+				if (!ai_reg(param)) continue;
+				regnums.insert(param.num);
+			}
+		}
+
+		// Next, we make a map of targets.
+		std::map<int, int> remapping;
+		for (auto &i : regnums) {
+			if (regnums.count(i-1) || i == 0) continue;
+			int j = i;
+			int k = i;
+			while (!regnums.count(k-1) && k != 0) --k; 
+			remapping[j] = k;
+			++remaps;
+			std::cout << "remapping " << j << " to " << k << std::endl;
+		}
+
+		// Now, remap all uses of k to v in remapping
+		for (auto &stmt : traversal) {
+			for (auto &param : stmt->params) {
+				if (!ai_reg(param)) continue;
+				if (!remapping.count(param.num)) continue;
+				param.num = remapping[param.num];
+			}
+		}
+	} while (remaps);
 }
