@@ -1,16 +1,15 @@
 // simple test
 
 extern printf(fmt, ...);
-static a = 1;
-
-SayHiAndOne() = {
-   printf("hi%d", a);
-   return 0;
-}
 
 main(argc, argv) = {
-   SayHiAndOne();
-   return 0;
+   if (argc >= 2 && argc <= 4) {
+   	return 2;
 }
+else {
+   return 5;
+   }
+}
+
 
 

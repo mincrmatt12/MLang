@@ -1,0 +1,6 @@
+extern printf(fmt, ...);
+
+main(a) = {
+	printf("tes2");
+	printf("test");	
+}

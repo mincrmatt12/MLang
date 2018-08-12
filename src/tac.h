@@ -55,6 +55,11 @@ struct addr_ref {
 			return ident == other.ident && rt == other.rt;
 		}
 	}
+
+	bool operator!=(const addr_ref& other) const {
+		return !operator==(other);
+	}
+
 	bool operator<(const addr_ref& other) const {
 		return std::tie(t, num, ident, rt) < std::tie(other.t, other.num, other.ident, other.rt);	
 	}

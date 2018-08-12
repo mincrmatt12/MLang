@@ -439,10 +439,10 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '/' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_div(M($1), M($3));}
     | expr '<' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
-					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3))), 0l)); }
+					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(C($1), C($3))), 0l)); }
     | expr ">=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
-					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(M($1), M($3)))); }
+					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(C($1), C($3)))); }
     | expr '>' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_gt(M($1), M($3));}
     | expr "<=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_gt(M($1), M($3)), 0l);}
     | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}

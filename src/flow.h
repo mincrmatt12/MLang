@@ -47,7 +47,7 @@ private:
 		}
 		if (!changes) return;
 
-		if (follow_copies && (si_mov(*where) || si_cast(*where))) {
+		if (follow_copies && si_mov(*where)) {
 
 			// make sure both arguments are registers
 			if (ai_reg(where->lhs()) && ai_reg(where->rhs())) {

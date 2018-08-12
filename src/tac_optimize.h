@@ -35,6 +35,8 @@ struct tacoptimizecontext {
 	int optimize_jumpthread();
 	int optimize_deduplicate();
 	int optimize_copyelision();
+	int optimize_simplify();
+	int optimize_rename(); // renames registers to use less of them
 };
 
 #endif // TAC_OPTIMIZE_H
