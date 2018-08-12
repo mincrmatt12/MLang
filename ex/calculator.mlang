@@ -1,0 +1,37 @@
+extern getchar();
+extern printf(fmt, ...);
+
+read_num() = {
+	var 8 o = getchar();	
+	if (o == ' ') return read_num();
+	else if (o >= '0' && o <= '9') {
+		var 64 number = 0;
+		while (o != ' ') {
+			number *= 10;
+			number += o - '0';
+			o = getchar();
+		}
+		return number;
+	}
+	else if (o == '+') return read_num() + read_num();
+	else if (o == '-') return read_num() - read_num();
+	else if (o == '*') return read_num() * read_num();
+	else {
+		var 64 n1 = read_num();
+		var 64 n2 = read_num();
+		if (n2 == 0) {
+			printf("You can't divide by zero!");
+			return 0;
+		}
+		else {
+			return n1 / n2;
+		}
+	}
+}
+
+main(argc, 8** argv) = {
+	var 64 result = read_num();
+	getchar();
+	printf("Answer = %i", result);
+	return 0;
+}
