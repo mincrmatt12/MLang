@@ -7,8 +7,8 @@
 #include "compiler.h"
 
 int main(int argc, char ** argv) {
-	std::cout << "mcc version 0.1" << std::endl;
-	std::string filename = argv[1];
+	arg_info a = parseargs(argc, argv);
+	std::string filename = a.input_name;
 	std::ifstream f(filename);
 	std::string buffer(std::istreambuf_iterator<char>(f), {});
 	
@@ -23,29 +23,21 @@ int main(int argc, char ** argv) {
 	parser.parse(); // parse the code from the file
 
 	// debug printing: first print defined globals
-#ifndef NDEBUG
 	debug_dump_ctx(ctx);
-#endif
 
 	astoptimizecontext ast_octx(std::move(ctx));
 	ast_octx.optimize();
 
-#ifndef NDEBUG
 	debug_dump_ctx(ast_octx);
-#endif
 
 	compiler comp(std::move(ast_octx));
 	comp.compile_all();
 
-#ifndef NDEBUG
 	debug_dump_ctx(comp);
-#endif
 
 	tacoptimizecontext tac_octx(std::move(comp));
 	tac_octx.optimize();
 
-#ifndef NDEBUG
 	debug_dump_ctx(tac_octx);
-#endif
 	return 0;
 }

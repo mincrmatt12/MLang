@@ -1,7 +1,9 @@
 #include "tac_optimize.h"
-#include "stringify.h"
 #include <cmath>
 #include "flow.h"
+#include "args.h"
+
+#define DUMP_T if(dumplevel >= 2)
 
 tacoptimizecontext::tacoptimizecontext(compiler &&c) {
 	all_statements = std::move(c.all_statements);
@@ -14,11 +16,11 @@ tacoptimizecontext::tacoptimizecontext(compiler &&c) {
 void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 	optimizing = &u; // set the current optimizing blocky thingy madoodle
 	if (u.start == nullptr) {
-		std::cout << "skipping optimize as start is null" << std::endl;
+		DUMP_T std::cout << "skipping optimize as start is null" << std::endl;
 		return;
 	}
 
-	std::cout << "optimizing" << std::endl;
+	DUMP_T std::cout << "optimizing" << std::endl;
 	while (
 			optimize_deadcode() ||
 			optimize_jumpthread() ||
@@ -32,19 +34,21 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 
 void tacoptimizecontext::optimize() {
 	for (auto &[_, cu] : func_compileunits) {
-		std::cout << "optimizing " << _ << std::endl;
+		DUMP_T std::cout << "optimizing " << _ << std::endl;
+		optimizing_name = _;
 		optimize_unit(cu);
 	}
 	optimize_unit(global_initscope);
-	std::cout << "optimized" << std::endl;
+	optimizing_name = "$GLOBAL";
+	if (dumplevel != 0) std::cout << "optimized" << std::endl;
 }
 
 int  tacoptimizecontext::optimize_deadcode() {
 	int modifications = 0;
 
-	if (si_nop(*optimizing->start) && optimizing->start->next != nullptr) {
+	if (do_remove_nops() && si_nop(*optimizing->start) && optimizing->start->next != nullptr) {
 		optimizing->start = optimizing->start->next;
-		std::cout << "removed nop at start" << std::endl;
+		DUMP_T std::cout << "removed nop at start" << std::endl;
 		++modifications;
 	}
 
@@ -56,23 +60,23 @@ int  tacoptimizecontext::optimize_deadcode() {
 	traverse_f(optimizing->start, [&](statement *s){
 		// Check if the next pointer or cond pointer points to a nop
 		// and change it to the nops next pointer
-		if (s->next != nullptr && si_nop(*s->next)) {
+		if (do_remove_nops() && s->next != nullptr && si_nop(*s->next)) {
 			s->next = s->next->next;
 			++modifications;
-			std::cout << "removed a nop" << std::endl;
+			DUMP_T std::cout << "removed a nop" << std::endl;
 		}
-		if (s->cond != nullptr && si_nop(*s->cond)) {
+		if (do_remove_nops() && s->cond != nullptr && si_nop(*s->cond)) {
 			s->cond = s->cond->next;
 			++modifications;
-			std::cout << "removed a nop" << std::endl;
+			DUMP_T std::cout << "removed a nop" << std::endl;
 		}
 		// Make sure rets don't go anywhere
 		if (si_ret(*s) && s->next != nullptr) {
 			s->next = nullptr;
 			++modifications;
-			std::cout << "stubbed a ret" << std::endl;
+			DUMP_T std::cout << "stubbed a ret" << std::endl;
 		}
-		if (!s->has_side_effects()) {
+		if (do_remove_deadstores() && !s->has_side_effects()) {
 			// Check if s writes to something which is never read from
 			std::size_t writes_with_no_reason = 0;
 			std::size_t index = 0;
@@ -88,7 +92,7 @@ int  tacoptimizecontext::optimize_deadcode() {
 				// We have reached peak stupidity, replace this with a bloody nop for christ's sake.
 				s->make_nop();
 				++modifications;
-				std::cout << "removed dead store" << std::endl;
+				DUMP_T std::cout << "removed dead store" << std::endl;
 			}
 		}
 	});
@@ -98,6 +102,7 @@ int  tacoptimizecontext::optimize_deadcode() {
 
 int  tacoptimizecontext::optimize_deduplicate() {
 	int modifications = 0;
+	if (!do_deduplicate()) return 0;
 
 	std::list<statement *> used;
 	// Traverse every statement, checking if we already saw an equivalent statement.
@@ -112,7 +117,7 @@ int  tacoptimizecontext::optimize_deduplicate() {
 			s->make_nop();
 			s->next = *i;
 			++modifications;
-			std::cout << "deduplicated code" << std::endl;
+			DUMP_T std::cout << "deduplicated code" << std::endl;
 		}
 		else {
 			used.push_back(s);
@@ -152,7 +157,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 
 	traverse_f(optimizing->start, [&](statement *s){
 			// Check if this is a cast.
-			if (si_cast(*s) && ai_reg(s->rhs())) {
+			if (do_simplify_useless_casts() && si_cast(*s) && ai_reg(s->rhs())) {
 				// Check the access info: Where does the parameter come from?
 				if (std::all_of(info.data[s].parameters[1].begin(), info.data[s].parameters[1].end(), [&](auto &source){
 					auto b_ = std::get_if<statement *>(&source);
@@ -189,7 +194,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 						// Change the target of the mov to tgt
 						mov_stmt->lhs() = addr_ref(tgt);
 						
-						std::cout << "simplified a useless cast" << std::endl;
+						DUMP_T std::cout << "simplified a useless cast" << std::endl;
 					}
 
 					s->make_nop();
@@ -209,7 +214,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 	info = access_info(*optimizing, true, true);
 
 	// Now, lets remove any reads to a register where the ony source of the register is a mov where the rhs is a literal
-	traverse_f(optimizing->start, [&](statement *s){
+        if (do_replace_literal_params()) traverse_f(optimizing->start, [&](statement *s){
 			int i = 0;
 			s->for_all_write([&](auto){++i;});
 			s->for_all_read([&](auto &reg){
@@ -229,13 +234,13 @@ int  tacoptimizecontext::optimize_copyelision() {
 				// OK! The only sources of this register all agree on one constant literal.
 				// Replace our parameter with that literal.
 				reg = addr_ref(ar_type::num, last);
-				std::cout << "replaced literal parameter" << std::endl;
+				DUMP_T std::cout << "replaced literal parameter" << std::endl;
 				++modifications;
 			});
 	});
 
 	info = access_info(*optimizing, true, true); // Now, lets do it all again but with ifnz following
-	traverse_f(optimizing->start, [&](statement *s){
+	if (do_replace_ifnz_literals()) traverse_f(optimizing->start, [&](statement *s){
 			int i = 0;
 			s->for_all_write([&](auto){ ++i; });
 			s->for_all_read([&](auto &reg){
@@ -257,7 +262,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 					// If the statement is an ifnz, we can just put in a constant here.
 					if (si_ifnz(*s)) {
 						++modifications;
-						std::cout << "replaced guaranteed value from ifnz" << std::endl;
+						DUMP_T std::cout << "replaced guaranteed value from ifnz" << std::endl;
 						s->lhs() = addr_ref(ar_type::num, static_cast<long>(!is_zero));
 					}
 					else {
@@ -269,7 +274,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 							if (si_gt(*s3) || si_eq(*s3)) {
 								// Alright, we can use the same trick we did above
 								++modifications;
-								std::cout << "replaced guaranteed value from gt/eq->ifnz" << std::endl;
+								DUMP_T std::cout << "replaced guaranteed value from gt/eq->ifnz" << std::endl;
 								reg = addr_ref(ar_type::num, static_cast<long>(!is_zero));
 							}
 						}
@@ -299,6 +304,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 
 			// Alright. Time to _fight to the death_.
 			// First, we need to ensure all readers are movs.
+			if (!do_copy_elide_write()) return;
 			
 			auto &d = info.data[s].parameters[index];
 			if (!std::all_of(d.begin(), d.end(), [&](auto &src){return std::holds_alternative<statement *>(src);})) return;
@@ -326,7 +332,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 			}
 
 			// Alright. We are good to go.
-			std::cout << "copy elision (type 2, write)" << std::endl;
+			DUMP_T std::cout << "copy elision (type 2, write)" << std::endl;
 			reg = compare;
 			for (auto &r : readers) r->make_nop();
 			++modifications;
@@ -334,6 +340,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 
 		s->for_all_read([&](auto &reg) {
 			int index = i++;
+			if (!do_copy_elide_read()) return;
 			if (!ai_reg(reg)) return; // Ignore literals + idents
 			// Ensure all sources of the register are copies where the sources are all equal
 			auto &d = info.data[s].parameters[index];
@@ -350,11 +357,11 @@ int  tacoptimizecontext::optimize_copyelision() {
 			})) {
 				// OK! At this point, src_r contains a valid source for reg. Replace it now.
 				++modifications;
-				std::cout << "copy elision (type 1, read): ";
-				std::cout << reg.num;
-				std::cout << " to ";
-				std::cout << src_r.num;
-				std::cout << std::endl;
+				DUMP_T std::cout << "copy elision (type 1, read): ";
+				DUMP_T std::cout << reg.num;
+				DUMP_T std::cout << " to ";
+				DUMP_T std::cout << src_r.num;
+				DUMP_T std::cout << std::endl;
 				reg = src_r;
 			}
 			
@@ -372,51 +379,66 @@ int  tacoptimizecontext::optimize_jumpthread() {
 
 	traverse_f(optimizing->start, [&](statement *s){
 			// Check if the pointed at statement is an ifnz, and the next statement is an ifnz, and the parameters are the same
-			while (si_ifnz(*s) && s->next != nullptr && si_ifnz(*s->next) && s->lhs() == s->next->lhs() && !s->lhs().is_volatile()
+			while (do_jumpthread() && si_ifnz(*s) && s->next != nullptr && si_ifnz(*s->next) && s->lhs() == s->next->lhs() && !s->lhs().is_volatile()
 					&& s->next != s->next->next) {
 				// next pointer is only executed if condition is false, the condition is always
 				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
 				// from the first statement
-				std::cout << "ifnz threaded" << std::endl;
+				DUMP_T std::cout << "ifnz threaded" << std::endl;
 				++modifications;
 				s->next = s->next->next;
 			}
-			while (si_ifnz(*s) && s->cond != nullptr && si_ifnz(*s->cond) && s->lhs() == s->cond->lhs() && !s->lhs().is_volatile()
+			while (do_jumpthread() && si_ifnz(*s) && s->cond != nullptr && si_ifnz(*s->cond) && s->lhs() == s->cond->lhs() && !s->lhs().is_volatile()
 					&& s->cond != s->cond->cond) {
 				// next pointer is only executed if condition is false, the condition is always
 				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
 				// from the first statement
-				std::cout << "ifnz threaded" << std::endl;
+				DUMP_T std::cout << "ifnz threaded" << std::endl;
 				++modifications;
 				s->cond = s->cond->cond;
 			}
 
 			// Check if the ifnz has a literal condition
-			while (si_ifnz(*s) && ai_num(s->lhs())) {
+			while (do_literal_jump_hardcode() && si_ifnz(*s) && ai_num(s->lhs())) {
 				// hardcode the jump
 				s->next = s->lhs().num ? s->cond : s->next;
 				s->make_nop();
-				std::cout << "literal ifnz hardcoded (type 1)" << std::endl;
+				DUMP_T std::cout << "literal ifnz hardcoded (type 1)" << std::endl;
 				++modifications;
 			}
 
-			while (si_ifnz(*s) && s->next == s->cond) {
+			while (do_remove_redundant_ifnz() && si_ifnz(*s) && s->next == s->cond) {
 				s->make_nop();
-				std::cout << "redundant ifnz removed" << std::endl;
+				DUMP_T std::cout << "redundant ifnz removed" << std::endl;
 				++modifications;
 			}
 
-			while ((si_mov(*s) || si_cast(*s)) && s->next != nullptr && si_ifnz(*s->next) && ai_num(s->rhs()) && s->lhs() == s->next->lhs()) {
+			while (do_literal_jump_hardcode() && (si_mov(*s) || si_cast(*s)) && s->next != nullptr && si_ifnz(*s->next) && ai_num(s->rhs()) && s->lhs() == s->next->lhs()) {
 				// hardcode our next with the result of of the ifnz
 				s->next = s->rhs().num ? s->next->cond : s->next->next;
-				std::cout << "literal ifnz hardcoded (type 2)" << std::endl;
+				DUMP_T std::cout << "literal ifnz hardcoded (type 2)" << std::endl;
 				++modifications;
 			}
 
 			if (si_mov(*s) && s->next != nullptr && si_ret(*s->next) && s->lhs() == s->next->lhs()) {
 				s->reinit(st_type::ret, s->rhs());
-				std::cout << "elided copy->ret" << std::endl;
+				DUMP_T std::cout << "elided copy->ret" << std::endl;
 				++modifications;
+			}
+
+			if (si_fcall(*s) && s->next != nullptr && si_ret(*s->next) && s->lhs() == s->next->lhs()) {
+				// Make sure the thing being called is an ident of this function
+				addr_ref &tgt = s->params[1];
+				if (do_remove_tail_call() && ai_ident(tgt) && tgt.ident.type == id_type::function && tgt.ident.name == optimizing_name && s->params.size() == 2) {
+					// Ok, thread back into main
+					
+					// But first, we have to move params around
+					// TODO: param shuffling, right now it only works if there are no params
+					s->make_nop();
+					s->next = optimizing->start;
+					++modifications;
+					DUMP_T std::cout << "tail call removed" << std::endl;
+				}
 			}
 
 	});
@@ -441,13 +463,14 @@ int  tacoptimizecontext::optimize_simplify() {
 			case st_type::add:
 				// Are all parameters literal?
 			{
+				if (!do_tac_arith_constfold()) break;
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Ok, replace this statement with a literal mov
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
 								(s->params[1].num + s->params[2].num) & (1<<size_of_rtype(s->lhs().rt))-1
 					));
 					++modifications;
-					std::cout << "replaced add with literal params" << std::endl;
+					DUMP_T std::cout << "replaced add with literal params" << std::endl;
 					break; // This is already done.
 				}
 
@@ -460,13 +483,13 @@ int  tacoptimizecontext::optimize_simplify() {
 					// Check if the expression was an augassin
 					if (s->lhs() == other) {
 						s->make_nop();
-						std::cout << "replaced redundant add with nop" << std::endl;
+						DUMP_T std::cout << "replaced redundant add with nop" << std::endl;
 						++modifications;
 					}
 					else {
 						// Replace with a mov
 						s->reinit(st_type::mov, s->lhs(), other);
-						std::cout << "replaced add+0 with mov" << std::endl;
+						DUMP_T std::cout << "replaced add+0 with mov" << std::endl;
 						++modifications;
 					}
 					break;
@@ -476,13 +499,14 @@ int  tacoptimizecontext::optimize_simplify() {
 			case st_type::mul:
 				// Are all parameters literal?
 			{
+				if (!do_tac_arith_constfold()) break;
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Ok, replace this statement with a literal mov
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
 								s->params[1].num * s->params[2].num & (1<<size_of_rtype(s->lhs().rt))-1
 					));
 					++modifications;
-					std::cout << "replaced mul with literal params" << std::endl;
+					DUMP_T std::cout << "replaced mul with literal params" << std::endl;
 					break; // This is already done.
 				}
 
@@ -495,13 +519,13 @@ int  tacoptimizecontext::optimize_simplify() {
 					// Check if the expression was an augassin
 					if (s->lhs() == other) {
 						s->make_nop();
-						std::cout << "replaced redundant mul with nop" << std::endl;
+						DUMP_T std::cout << "replaced redundant mul with nop" << std::endl;
 						++modifications;
 					}
 					else {
 						// Replace with a mov
 						s->reinit(st_type::mov, s->lhs(), other);
-						std::cout << "replaced mul*1 with mov" << std::endl;
+						DUMP_T std::cout << "replaced mul*1 with mov" << std::endl;
 						++modifications;
 					}
 					break;
@@ -510,51 +534,56 @@ int  tacoptimizecontext::optimize_simplify() {
 			}
 			case st_type::div:
 			{
+				if (!do_tac_arith_constfold()) break;
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Ok, replace this statement with a literal mov
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
 								s->params[1].num / s->params[2].num & (1<<size_of_rtype(s->lhs().rt))-1
 					));
 					++modifications;
-					std::cout << "replaced div with literal params" << std::endl;
+					DUMP_T std::cout << "replaced div with literal params" << std::endl;
 				}
 				break;
 			}
 			case st_type::neg:
 			{
+				if (!do_tac_arith_constfold()) break;
 				if (ai_num(s->rhs())) {
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, -s->rhs().num));
 					++modifications;
-					std::cout << "replaced neg with literal to -literal" << std::endl;
+					DUMP_T std::cout << "replaced neg with literal to -literal" << std::endl;
 				}
 				break;
 			}
 			case st_type::eq:
 			{
+				if (!do_tac_logic_constfold()) break;
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Alright. We can replace this with a constant.
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
 								static_cast<long>(s->params[1].num == s->params[2].num)));
 					++modifications;
-					std::cout << "replaced eq with constant" << std::endl;
+					DUMP_T std::cout << "replaced eq with constant" << std::endl;
 
 				}
 				break;
 			}
 			case st_type::gt:
 			{
+				if (!do_tac_logic_constfold()) break;
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Alright. We can replace this with a constant.
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
 								static_cast<long>(s->params[1].num == s->params[2].num)));
 					++modifications;
-					std::cout << "replaced eq with constant" << std::endl;
+					DUMP_T std::cout << "replaced eq with constant" << std::endl;
 
 				}
 				break;
 			}
 			case st_type::ifnz:
 			{
+				if (!do_swap_cond_next()) break;
 				// Check if the source of this ifnz is an eq with a literal zero.
 				auto &d = info.data[s].parameters[0];
 				if (d.size() == 1) {
@@ -577,7 +606,7 @@ int  tacoptimizecontext::optimize_simplify() {
 									++modifications;
 									std::swap(s->next, s->cond);
 									s->params[0] = std::move(r);
-									std::cout << "swapped cond&next for !=" << std::endl;
+									DUMP_T std::cout << "swapped cond&next for !=" << std::endl;
 								}
 							} 
 						}
@@ -587,13 +616,33 @@ int  tacoptimizecontext::optimize_simplify() {
 			}
 			case st_type::mov:
 			{
+				if (!do_remove_useless_mov()) break;
 				// Replace
 				// mov r0 r0
 				// with nothing
 				if (s->lhs() == s->rhs()) {
 					s->make_nop();
 					++modifications;
-					std::cout << "replaced mov x=x" << std::endl;
+					DUMP_T std::cout << "replaced mov x=x" << std::endl;
+				}
+			}
+			case st_type::fcall:
+			{
+				if (!do_remove_fcall_result_cast()) break;
+				// Replace
+				// fcall r1 ....
+				// cast r1 r1
+				// with
+				// fcall r1 ....
+				if (s->next != nullptr && si_cast(*s->next)) {
+					if (s->lhs() == s->next->rhs()) {
+						if (ai_reg(s->lhs()) && ai_reg(s->next->lhs()) && s->next->lhs().num == s->next->rhs().num) {
+							s->lhs() = s->next->lhs();
+							s->next->make_nop();
+							++modifications;
+							DUMP_T std::cout << "removed useless fcall result cast" << std::endl;
+						}
+					}
 				}
 			}
 			default:
@@ -606,6 +655,7 @@ int  tacoptimizecontext::optimize_simplify() {
 
 int tacoptimizecontext::optimize_rename() {
 	int modifications = 0;
+	if (!do_rename_registers()) return 0;
 
 	// Alright. Matthew's Renaming Algorithm (tm) consists of the following:
 	//
@@ -725,7 +775,7 @@ int tacoptimizecontext::optimize_rename() {
 							renamer->for_all_write(rename);
 							renamer->for_all_read(rename);
 						}
-						std::cout << "renamed " << original << " to " << i << std::endl;
+						DUMP_T std::cout << "renamed " << original << " to " << i << std::endl;
 						++modifications;
 						return modifications;
 					}
@@ -741,6 +791,7 @@ int tacoptimizecontext::optimize_rename() {
 void tacoptimizecontext::remove_register_holes() {
 	// This function walks through the entire tree, working out which registers are never written to. It then goes through the tree again, but
 	// modifies all references to any hole+1 to the hole by looking it up in a map.
+	if (!do_remap_registers()) return;
 	
 	int remaps;
 	do {
@@ -764,7 +815,7 @@ void tacoptimizecontext::remove_register_holes() {
 			while (!regnums.count(k-1) && k != 0) --k; 
 			remapping[j] = k;
 			++remaps;
-			std::cout << "remapping " << j << " to " << k << std::endl;
+			DUMP_T std::cout << "remapping " << j << " to " << k << std::endl;
 		}
 
 		// Now, remap all uses of k to v in remapping
@@ -777,3 +828,5 @@ void tacoptimizecontext::remove_register_holes() {
 		}
 	} while (remaps);
 }
+
+#undef DUMP_T

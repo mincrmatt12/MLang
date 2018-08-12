@@ -2,6 +2,8 @@
 #include "stringify.h"
 #include "transform_iterator.h"
 
+#define DUMP_T if(dumplevel >= 2)
+
 void astoptimizecontext::find_pure_funcs() {
 	purity.clear(); // reset pure functions
 
@@ -37,7 +39,7 @@ void astoptimizecontext::find_pure_funcs() {
 				if (purity.count(called.name) == 0 && called.name != f.name) {
 					// unknown function, wait for next round
 					unchecked_encountered = true;
-					std::cout << "next iter for " << called.name << std::endl;
+					DUMP_T std::cout << "next iter for " << called.name << std::endl;
 				}
 			}
 			return false;
@@ -59,6 +61,7 @@ void astoptimizecontext::optimize() {
 	this->find_pure_funcs();
 	this->optimize_iterator(make_transform_iterator(this->functions.begin(), this->functions.end(), [&](function &e) -> auto& {return e.code;}), transform_iterator<expression &>());
 	this->optimize_iterator(this->global_inits.begin(), this->global_inits.end());
+	if (dumplevel != 0) std::cout << "optimized" << std::endl;
 }	
 
 bool astoptimizecontext::is_pure(const expression &e, bool typeonly) {
@@ -72,6 +75,7 @@ bool astoptimizecontext::is_pure(const expression &e, bool typeonly) {
 
 int astoptimizecontext::optimize_flatten(expression &e) {
 	int modifications = 0;
+	if (!do_flatten_tree()) return 0;
 	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e) || is_div(e)) {
 		// Adopt children of the same type as e
 		expr_vec new_args{};
@@ -80,7 +84,7 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 			++modifications;
 			// Adopt this expression
 			new_args.splice(new_args.end(), d.params);
-			std::cout << "flattened one expression in tree" << std::endl;
+			DUMP_T std::cout << "flattened one expression in tree" << std::endl;
 		}
 	        e.params = std::move(new_args);
 	}
@@ -93,7 +97,7 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 				for (auto &param : d.params.front().params) {
 					new_args.emplace_back(std::move(e_neg(std::move(param))));
 				}
-				std::cout << "simplified 1 neg expr" << std::endl;
+				DUMP_T std::cout << "simplified 1 neg expr" << std::endl;
 			}
 			else new_args.emplace_back(std::move(d));
 		}
@@ -112,8 +116,9 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 
 int astoptimizecontext::optimize_deadcode(expression &e) {
 	int modifications = 0;
+	if (!do_remove_ast_deadcode()) return 0;
 	if (!(is_loop(e) || is_comma(e))) return 0;
-	if (is_loop(e) && is_literal_number(e.params.front()) && e.params.front().numvalue == 0) {e = e_nop(); std::cout << "erased pointless loop" << std::endl; return 1;}
+	if (is_loop(e) && is_literal_number(e.params.front()) && e.params.front().numvalue == 0) {e = e_nop(); DUMP_T std::cout << "erased pointless loop" << std::endl; return 1;}
 
 	// Remove any expression with no side effects except for the last one
 	// Additionally, take things that aren't pure but that don't contribute to anything and place the non-pure operands
@@ -142,7 +147,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 		if (is_pure(*i)) {
 			// In this case, we can just ELIMINATE IT
 			// FATALITY
-			std::cout << "removed pure expression from comma or loop" << std::endl;
+			DUMP_T std::cout << "removed pure expression from comma or loop" << std::endl;
 			i = e.params.erase(i);
 		}
 		else {
@@ -165,7 +170,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 					case ex_type::deref:
 					case ex_type::comma:
 						auto tmp(std::move(i->params));
-						std::cout << "adopted parameters from sub-expr" << std::endl;
+						DUMP_T std::cout << "adopted parameters from sub-expr" << std::endl;
 						e.params.splice(i = e.params.erase(i), std::move(tmp));
 				}
 			}
@@ -177,7 +182,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 		size_t length = std::distance(e.params.begin(), loc) + 1;
 		if (length != e.params.size()) {
 			e.params.resize(length);
-			std::cout << "removed inaccessible code" << std::endl;
+			DUMP_T std::cout << "removed inaccessible code" << std::endl;
 			++modifications;
 		}
 	}
@@ -187,6 +192,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 
 int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	int modifications = 0;
+	if (!do_ast_arith_constfold()) return 0;
 	// Constant folding for neg:
 	// |- neg
 	// | |- literal_number 2
@@ -198,12 +204,12 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	if (is_neg(e)) {
 		if (is_literal_number(e.params.front())) {
 			++modifications;
-			std::cout << "folded neg" << std::endl;
+			DUMP_T std::cout << "folded neg" << std::endl;
 			e = -e.params.front().numvalue;
 		}
 		else if (is_neg(e.params.front())) {
 			++modifications;
-			std::cout << "removed extraneous neg" << std::endl;
+			DUMP_T std::cout << "removed extraneous neg" << std::endl;
 			e = expression(std::move(e.params.front().params.front()));
 		}
 	}
@@ -245,14 +251,14 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 
 			// Count the modification
 			++modifications;
-			std::cout << "folded " << constants.size() << " constants into one." << std::endl;
+			DUMP_T std::cout << "folded " << constants.size() << " constants into one." << std::endl;
 		}
 	}
 	// Remove 0's from adds
 	if (is_add(e)) {
 		e.params.remove_if([&](expression &h){
 				if (is_literal_number(h) && h.numvalue == 0) {
-					std::cout << "removed 0 from add" << std::endl;
+					DUMP_T std::cout << "removed 0 from add" << std::endl;
 					++modifications;
 					return true;
 				}
@@ -266,7 +272,7 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 		e.params.remove_if([&](expression &h){
 				++i;
 				if (is_literal_number(h) && h.numvalue == 1 && (e.t == ex_type::div && i != 1)) {
-					std::cout << "removed 1 from mul/div" << std::endl;
+					DUMP_T std::cout << "removed 1 from mul/div" << std::endl;
 					++modifications;
 					return true;
 				}
@@ -326,14 +332,14 @@ int astoptimizecontext::optimize_pointer_simplify(expression &e) {
 	if (is_addr(e)) {
 		if (is_deref(e.params.front())) {
 			++modifications;
-			std::cout << "simplified &*" << std::endl;
+			DUMP_T std::cout << "simplified &*" << std::endl;
 			e = expression(std::move(e.params.front().params.front()));	
 		}	
 	}
 	if (is_deref(e)) {
 		if (is_addr(e.params.front())) {
 			++modifications;
-			std::cout << "simplified *&" << std::endl;
+			DUMP_T std::cout << "simplified *&" << std::endl;
 			e = expression(std::move(e.params.front().params.front()));	
 		}	
 	}
@@ -342,6 +348,7 @@ int astoptimizecontext::optimize_pointer_simplify(expression &e) {
 
 int astoptimizecontext::optimize_logicalfold(expression &e) {
 	int modifications = 0;
+	if (!do_ast_logic_constfold()) return 0;
 	if (!(is_l_or(e) || is_l_and(e))) return 0;
 
 	auto magic_val = is_l_or(e) ? [](long &v){return v != 0;} : [](long &v){return v == 0;};
@@ -360,11 +367,11 @@ int astoptimizecontext::optimize_logicalfold(expression &e) {
 		return is_literal_number(p) && magic_val(p.numvalue);	
 	}); t != e.params.end()) {
 		++modifications;
-		std::cout << "folding logical: ";
+		DUMP_T std::cout << "folding logical: ";
 		// OK! t is now an iterator pointing directly at the 0. We now need to find if there are any non-pure expressions before here		
 		if (t == e.params.begin()) {
 			good:
-				std::cout << "using simple fixer" << std::endl;
+				DUMP_T std::cout << "using simple fixer" << std::endl;
 				e = is_l_or(e) ? 1l : 0l;
 		}
 		else {
@@ -374,7 +381,7 @@ int astoptimizecontext::optimize_logicalfold(expression &e) {
 			auto r_end = res.base();
 			auto n_e = e_l_and();
 			n_e.params.splice(n_e.params.begin(), e.params, e.params.begin(), std::next(r_end));
-			std::cout << "using complex fixer" << std::endl;
+			DUMP_T std::cout << "using complex fixer" << std::endl;
 			e = e_comma(std::move(n_e), is_l_or(e) ? 1l : 0l);
 		}
 	}
@@ -391,7 +398,7 @@ int astoptimizecontext::optimize_logicalfold(expression &e) {
 		// Make sure we haven't changed out the things
 		for (auto i = std::next(e.params.begin()); i != e.params.end();) {
 			if (is_pure(*i) && std::find(e.params.begin(), i, *i) != i) {
-				std::cout << "removing duplicate in log" << std::endl;
+				DUMP_T std::cout << "removing duplicate in log" << std::endl;
 				++modifications;
 				i = e.params.erase(i);
 			}	
@@ -405,6 +412,7 @@ int astoptimizecontext::optimize_logicalfold(expression &e) {
 }
 
 int astoptimizecontext::optimize_simplify(expression &e) {
+	if (!do_ast_logic_constfold()) return 0;
 	// Due to my design, many optimizations are not possible due to me not being able to create temporaries due to the context-less approach used 
 	// when simplifying expressions. This may change at a later date but for now I will only add optimizations that can be executed without temporaries,
 	// usually meaning we cannot optimize unpure values. :(
@@ -469,7 +477,7 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 				if (size(e.castvalue) == size(e.params.front().castvalue)) {
 				++modifications;
 				e = expression(std::move(e.params.front()));
-				std::cout << "simplified nested casts" << std::endl;
+				DUMP_T std::cout << "simplified nested casts" << std::endl;
 			}
 		}
 	}
@@ -500,7 +508,7 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 							f = expression(std::move(f.params.front()));
 						}
 						e = cast(std::move(e), ex_rtype(rtt));
-						std::cout << "extracted casts" << std::endl;
+						DUMP_T std::cout << "extracted casts" << std::endl;
 						++modifications;
 					}
 				}
@@ -514,7 +522,7 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 		if (e.castvalue == e.params.front().get_type()) {
 			++modifications;
 			// Remove the cast
-			std::cout << "removing redundant cast" << std::endl;
+			DUMP_T std::cout << "removing redundant cast" << std::endl;
 			e = expression(std::move(e.params.front()));
 		}
 	}

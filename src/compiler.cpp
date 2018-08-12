@@ -68,7 +68,6 @@ void compiler::compile_unit(compilation_unit &c) {
 
 	// Compile this units code
 	this->compile(c.e);
-	std::cout << "BB" << std::endl;
 }
 
 addr_ref compiler::compile(const expression &expr) {
@@ -118,7 +117,6 @@ addr_ref compiler::compile(const expression &expr) {
 			break;
 		case ex_type::ret:
 			append(s_ret(result    =         compile(expr.params.front())));
-			std::cout << "CC" << std::endl;
 			break;
 		case ex_type::addr:
 			append(s_addrof(result = make(expr.get_type()), compile(expr.params.front())));

@@ -12,6 +12,7 @@
 #include "ast_optimize.h"
 #include "compiler.h"
 #include "tac_optimize.h"
+#include "args.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -105,6 +106,7 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 }
 
 static void debug_dump_ctx(parsecontext& ctx) {
+	if (dumplevel == 0) return;
 	std::cout << "=== external functions ===" << std::endl;
 	for (const auto &e : ctx.ext_list) {
 		std::cout << e.name << "(";
@@ -133,6 +135,7 @@ static void debug_dump_ctx(parsecontext& ctx) {
 }
 
 static void debug_dump_ctx(astoptimizecontext& ctx) {
+	if (dumplevel == 0) return;
 	std::cout << "=== external functions ===" << std::endl;
 	for (const auto &e : ctx.ext_functions) {
 		std::cout << e.name << "(";
@@ -243,6 +246,7 @@ static void print_statement_list(statement * start) {
 }
 
 static void debug_dump_ctx(compiler &ctx) {
+	if (dumplevel == 0) return;
 	// First, print out all of the functions
 	
 	for (auto &[name, stp] : ctx.func_compileunits) {
@@ -256,6 +260,7 @@ static void debug_dump_ctx(compiler &ctx) {
 }
 
 static void debug_dump_ctx(tacoptimizecontext &ctx) {
+	if (dumplevel == 0) return;
 	// First, print out all of the functions
 	
 	for (auto &[name, stp] : ctx.func_compileunits) {

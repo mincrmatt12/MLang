@@ -6,7 +6,7 @@ read_num() = {
 	if (o == ' ') return read_num();
 	else if (o >= '0' && o <= '9') {
 		var 64 number = 0;
-		while (o != ' ') {
+		while (o >= '0' && o <= '9') {
 			number *= 10;
 			number += o - '0';
 			o = getchar();
