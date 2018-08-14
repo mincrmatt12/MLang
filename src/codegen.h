@@ -128,12 +128,12 @@ namespace x86_64 {
 	typedef std::variant<reg, std::string, int16_t, long> param_type;
 
 	// Converts a parameter to a memory indexed operand, immediate or a register name
-	std::string nameoffset_to_str(const param_type &p) {
+	static std::string nameoffset_to_str(const param_type &p) {
 		if (std::holds_alternative<int16_t>(p)) {
 			return std::to_string(std::get<int16_t>(p)) + "(%rbp)";
 		}
 		else if (std::holds_alternative<std::string>(p)) {
-			return std::get<std::string>(p) + "(%rip)";
+			return std::get<std::string>(p);
 		}
 		else if (std::holds_alternative<reg>(p)) {
 			return "%" + std::get<reg>(p).to_string();
@@ -159,7 +159,24 @@ namespace x86_64 {
 	};
 
 	static inline std::string ssuffix(int size) {
-		return std::string(&("bwlq"[size-1]), 1);
+		std::string re{};
+		switch (size) {
+			case 1:
+				re += 'b';
+				break;
+			case 2:
+				re += 'w';
+				break;
+			case 3:
+				re += 'l';
+				break;
+			case 4:
+				re += 'q';
+				break;
+			default:
+				break;
+		}
+		return re;
 	}
 
 	struct codegenerator {
@@ -171,19 +188,18 @@ namespace x86_64 {
 
 		std::string text_section;
 		std::string bss_section;
-		compilation_unit *generating;
-
-		std::vector<param_type> register_allocations;
 
 		codegenerator(tacoptimizecontext &&ctx);
 
 		void generate();
 		void prepare();
 
-		void prepare_unit(compilation_unit *u);
 	private:
-
 		recipe::result_type pick(st_type t, std::vector<param_type> params, std::vector<int> sizes) /* not refs as the funcs can modify them */;
+		void prepare_unit(compilation_unit *u);
+		void generate_unit(std::string label_name, compilation_unit &u);
+
+		std::pair<std::vector<param_type>, std::vector<int>> allocate_registers(compilation_unit &u);
 	};
 }
 

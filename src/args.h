@@ -60,9 +60,7 @@ extern int dumplevel;
 
 struct arg_info {
 	std::string input_name;
-	std::string output_name = "a.out";
-	std::vector<std::string> ass_params{};
-	std::vector<std::string> link_params{};
+	std::string output_name = "a.s";
 };
 
 static void handle_m(std::string key, std::string val) {
@@ -96,15 +94,6 @@ static arg_info parseargs(int argc, char ** argv) {
 			case 'V':
 			case 'v':
 				dumplevel = std::count(arg.begin(), arg.end(), 'V') + std::count(arg.begin(), arg.end(), 'v');
-				break;
-			case 'l':
-				a.link_params.push_back(arg);
-				break;
-			case 'L':
-				a.link_params.push_back(arg.substr(2));
-				break;
-			case 'A':
-				a.ass_params.push_back(arg.substr(2));
 				break;
 			case 'm':
 				{

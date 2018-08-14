@@ -13,6 +13,7 @@
 #include "compiler.h"
 #include "tac_optimize.h"
 #include "args.h"
+#include "codegen.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -272,4 +273,14 @@ static void debug_dump_ctx(tacoptimizecontext &ctx) {
 	std::cout << "$GLOBAL:" << std::endl;
 	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
 }
+
+static void debug_dump_ctx(x86_64::codegenerator &cg) {
+	if (dumplevel == 0) return;
+	std::cout << ".bss\n";
+	std::cout << cg.bss_section;
+	std::cout << ".text\n";
+	std::cout << cg.text_section;
+	std::cout << std::endl;
+}
+
 #endif

@@ -4,6 +4,7 @@ extern printf(fmt, ...);
 
 main(argc, argv) = {
    if (argc >= 2 && argc <= 4) {
+   	printf("hi");
    	return 2;
 }
 else {

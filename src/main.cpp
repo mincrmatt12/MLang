@@ -5,6 +5,7 @@
 #include "ast_optimize.h"
 #include "tac_optimize.h"
 #include "compiler.h"
+#include "codegen.h"
 
 int main(int argc, char ** argv) {
 	arg_info a = parseargs(argc, argv);
@@ -39,5 +40,20 @@ int main(int argc, char ** argv) {
 	tac_octx.optimize();
 
 	debug_dump_ctx(tac_octx);
+
+	if (arch == "x86_64") {
+		x86_64::codegenerator cg(std::move(tac_octx));
+		cg.generate();
+		
+		debug_dump_ctx(cg);
+
+		// Write output to a file
+		std::ofstream output(a.output_name);
+		output << cg.bss_section << std::endl;
+		output << cg.text_section << std::endl;
+		output << ".globl main" << std::endl;
+		output.flush();
+		output.close();
+	}
 	return 0;
 }
