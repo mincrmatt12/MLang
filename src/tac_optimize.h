@@ -22,6 +22,7 @@ struct tacoptimizecontext {
 	tacoptimizecontext(compiler &&c);
 
 	compilation_unit * optimizing{nullptr};
+	std::string        optimizing_name;
 
 	void optimize_unit(compilation_unit &u);
 	void optimize();

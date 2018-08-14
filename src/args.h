@@ -90,6 +90,9 @@ static arg_info parseargs(int argc, char ** argv) {
 			case 'O':
 				oplevel = std::stoi(arg.substr(2));
 				break;
+			case 'o':
+				a.output_name = arg.substr(2);
+				break;
 			case 'V':
 			case 'v':
 				dumplevel = std::count(arg.begin(), arg.end(), 'V') + std::count(arg.begin(), arg.end(), 'v');
