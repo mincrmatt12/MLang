@@ -308,8 +308,8 @@ namespace x86_64 {
 		});
 		recipe(st_type::eq, {{REGISTER, NAME, OFFSET}, {REGISTER, IMM}, {REGISTER, NAME, OFFSET}}, [](auto &p, auto &s){
 			std::string text;
-			text += "cmp" + S(s[0]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "xor %rax, %rax\n";
+			text += "cmp" + S(s[2]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "lahf\n";
 			if (std::holds_alternative<reg>(p[0])) {
 				if (std::get<reg>(p[0]).name != reg_name::a) {
@@ -319,7 +319,7 @@ namespace x86_64 {
 			else {
 				text += "mov" + S(s[0]) + " $0, " + N(p[0]) + "\n";
 			}
-			text += "and $0x4000, %ax\n";
+			text += "andb $0b01000000, %ah\n";
 			text += "shr $14, %ax\n";
 			text += "mov" + S(s[0]) + " " + N((reg{reg_name::a, s[0]})) + ", " + N(p[0]);
 			return recipe::result_type{
@@ -330,8 +330,8 @@ namespace x86_64 {
 		recipe(st_type::eq, {{REGISTER, NAME, OFFSET}, {REGISTER, NAME, OFFSET}, {REGISTER, IMM}}, [](auto &p, auto &s){
 			std::swap(p[1], p[2]);
 			std::string text;
-			text += "cmp" + S(s[0]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "xor %rax, %rax\n";
+			text += "cmp" + S(s[2]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "lahf\n";
 			if (std::holds_alternative<reg>(p[0])) {
 				if (std::get<reg>(p[0]).name != reg_name::a) {
@@ -341,7 +341,7 @@ namespace x86_64 {
 			else {
 				text += "mov" + S(s[0]) + " $0, " + N(p[0]) + "\n";
 			}
-			text += "and $0x4000, %ax\n";
+			text += "andb $0b01000000, %ah\n";
 			text += "shr $14, %ax\n";
 			text += "mov" + S(s[0]) + " " + N((reg{reg_name::a, s[0]})) + ", " + N(p[0]);
 			return recipe::result_type{
@@ -353,8 +353,8 @@ namespace x86_64 {
 			std::string text;
 			reg temp{reg_name::a, s[2]};
 			text += "mov" + S(s[2]) + " " + N(p[2]) + ", " + N(temp) + "\n";
-			text += "cmp" + S(s[0]) + " " + N(p[1]) + ", " + N(temp) + "\n";
 			text += "xor %rax, %rax\n";
+			text += "cmp" + S(s[1]) + " " + N(p[1]) + ", " + N(temp) + "\n";
 			text += "lahf\n";
 			if (std::holds_alternative<reg>(p[0])) {
 				if (std::get<reg>(p[0]).name != reg_name::a) {
@@ -364,7 +364,7 @@ namespace x86_64 {
 			else {
 				text += "mov" + S(s[0]) + " $0, " + N(p[0]) + "\n";
 			}
-			text += "and $0x4000, %ax\n";
+			text += "andb $0b01000000, %ah\n";
 			text += "shr $14, %ax\n";
 			text += "mov" + S(s[0]) + " " + N((reg{reg_name::a, s[0]})) + ", " + N(p[0]);
 			return recipe::result_type{
@@ -386,7 +386,7 @@ namespace x86_64 {
 			static int label_count = 0;
 			int label = label_count++;
 			std::string text;
-			text += "cmp" + S(s[1]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
+			text += "cmp" + S(s[2]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "mov" + S(s[0]) + " $1, " + N(p[0]) + "\n";
 			text += "jg .ggl" + std::to_string(label) + "\n";
 			text += "mov" + S(s[0]) + " $0, " + N(p[0]) + "\n";
@@ -408,7 +408,7 @@ namespace x86_64 {
 				p[2] = temp;
 				clobber.insert(reg_name::a);
 			}
-			text += "cmp" + S(s[1]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
+			text += "cmp" + S(s[2]) + " " + N(p[1]) + ", " + N(p[2]) + "\n";
 			text += "mov" + S(s[0]) + " $1, " + N(p[0]) + "\n";
 			text += "jg .ggl" + std::to_string(label) + "\n";
 			text += "mov" + S(s[0]) + " $0, " + N(p[0]) + "\n";
@@ -450,7 +450,7 @@ namespace x86_64 {
 			// First though, make sure they aren't equal. If they are, just do a mov
 			if (s[0] == s[1] || s[0] < s[1]){
 				return recipe::result_type{
-					"mov" + S(s[0]) + " " + N(p[1]) + ", " + N(p[0]),
+					"mov" + S(s[0]) + " " + N((reg{std::get<reg>(p[1]).name, s[0]})) + ", " + N(p[0]),
 					{}
 				};
 			}
@@ -466,7 +466,7 @@ namespace x86_64 {
 			if (s[0] == s[1]) {
 				if (std::holds_alternative<reg>(p[0])) {
 					return recipe::result_type{
-						"mov" + S(s[0]) + " " + N(p[1]) + ", " + N(p[0]),
+						"mov" + S(s[0]) + " " + N((reg{std::get<reg>(p[1]).name, s[0]})) + ", " + N(p[0]),
 						{}
 					};
 				}
@@ -589,7 +589,16 @@ namespace x86_64 {
 					addr_ref rhs  = s->rhs();
 					st_type  orig = s->t;
 
-					s->reinit(st_type::mov, s->lhs(), s->params[1]);
+					if (rhs.rt != s->params[1].rt) {
+						if (rhs.rt == s->lhs().rt) {
+							rhs = s->params[1];
+							s->reinit(st_type::cast, s->lhs(), s->rhs());
+						}
+						else {
+							s->reinit(st_type::cast, s->lhs(), s->params[1]);
+						}
+					}
+					else s->reinit(st_type::mov, s->lhs(), s->params[1]);
 					auto st = std::make_unique<statement>(orig, addr_ref(s->lhs()), addr_ref(s->lhs()), rhs);
 					st->next = s->next;
 					s->next = st.get();
@@ -611,6 +620,14 @@ namespace x86_64 {
 					s->next = st.get();
 					all_statements.emplace_back(std::move(st));
 					break;
+				}
+			// Fix movs of different types
+			case st_type::mov:
+				{
+					if (s->lhs().rt != s->rhs().rt) {
+						s->t = st_type::cast;
+						break;
+					}
 				}
 			default:
 				break;
@@ -806,7 +823,7 @@ namespace x86_64 {
 		for (auto &[i, st] : trav) {
 			// Check if we need to insert a label
 			if (labels.count(i) > 0) {
-				text_section += ".LC" + std::to_string(labels[i]) + ":\n";
+				text_section += ".LC" + label_name + std::to_string(labels[i]) + ":\n";
 			}
 
 			// Assemble the parameter types
@@ -896,15 +913,33 @@ namespace x86_64 {
 									text_section += "pushq " + nameoffset_to_str(types[i+2]) + "\n";
 								}
 								else {
-									text_section += "pushq " + nameoffset_to_str(reg{std::get<reg>(types[i+2]).name, 4});
+									// Make sure we haven't already pushed the parameters.
+									if (clobbering.count(std::get<reg>(types[i+2]).name)) {
+										// HANDLE THIS MATTHEW YOU LAZY PIECE OF CRAP
+										throw std::runtime_error("Invalid register allocation detected for fcall with >6");
+									}
+									else {
+										text_section += "pushq " + nameoffset_to_str(reg{std::get<reg>(types[i+2]).name, 4});
+									}
 								}
 							}
 							else {
 								reg_name target = parameter_locations.front();
 								parameter_locations.erase(parameter_locations.begin());
 
-								text_section += "xor " + nameoffset_to_str(reg{target, 4}) + ", " + nameoffset_to_str(reg{target, 4}) + "\n";
-								text_section += "mov" + ssuffix(sizes[i+2]) + " " + nameoffset_to_str(types[i+2]) + ", " + nameoffset_to_str(reg{target, sizes[i+2]}) + "\n";
+								if (std::holds_alternative<reg>(types[i+2]) && clobbering.count(std::get<reg>(types[i+2]).name)) {
+									// Work out where on the stack it is.
+									int offset = 0;
+									for (auto j = clobbering.rbegin(); *j != std::get<reg>(types[i+2]).name; ++j) {
+										offset += 8;
+									}
+									text_section += "xor " + nameoffset_to_str(reg{target, 4}) + ", " + nameoffset_to_str(reg{target, 4}) + "\n";
+									text_section += "mov" + ssuffix(sizes[i+2]) + " " + std::to_string(offset) + "(%rsp), " + nameoffset_to_str(reg{target, sizes[i+2]}) + "\n";
+								}
+								else {
+									text_section += "xor " + nameoffset_to_str(reg{target, 4}) + ", " + nameoffset_to_str(reg{target, 4}) + "\n";
+									text_section += "mov" + ssuffix(sizes[i+2]) + " " + nameoffset_to_str(types[i+2]) + ", " + nameoffset_to_str(reg{target, sizes[i+2]}) + "\n";
+								}
 							}
 						}
 
@@ -943,7 +978,7 @@ namespace x86_64 {
 				case st_type::ifnz:
 					{
 						text_section += "cmp" + ssuffix(sizes[0]) + " $0, " + nameoffset_to_str(types[0]) + "\n" +
-							        "jne .LC" + std::to_string(labels[indices[st->cond]]) + "\n";
+							        "jne .LC" + label_name + std::to_string(labels[indices[st->cond]]) + "\n";
 						break;
 					}
 				default:
@@ -977,7 +1012,7 @@ namespace x86_64 {
 			// Check if the next statement has the next index
 			if (indices[st->next] != i + 1 && st->next != nullptr) {
 				// Add a jump
-				text_section += "jmp .LC" + std::to_string(labels[indices[st->next]]) + "\n";
+				text_section += "jmp .LC" + label_name + std::to_string(labels[indices[st->next]]) + "\n";
 			}
 		}
 

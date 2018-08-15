@@ -49,9 +49,18 @@ int main(int argc, char ** argv) {
 
 		// Write output to a file
 		std::ofstream output(a.output_name);
-		output << cg.bss_section << std::endl;
-		output << cg.text_section << std::endl;
+		output << ".bss" << std::endl << cg.bss_section << std::endl;
+		output << ".text" << std::endl << cg.text_section << std::endl;
 		output << ".globl main" << std::endl;
+		output << ".data" << std::endl;
+		for (int i = 0; i != tac_octx.string_table.size(); ++i) {
+			if (tac_octx.string_table[i] == '\0') {
+				tac_octx.string_table[i] = '0';
+				tac_octx.string_table.insert(tac_octx.string_table.begin()+i, '\\');
+			}
+		}
+		output << "___strtable: .ascii \"" << tac_octx.string_table << "\"" << std::endl;
+		
 		output.flush();
 		output.close();
 	}
