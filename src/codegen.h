@@ -143,21 +143,6 @@ namespace x86_64 {
 		}
 	}
 
-	struct recipe {
-		typedef std::pair<std::string, std::set<reg_name>> result_type;
-		struct compare_type {
-			bool operator()(const result_type &a, const result_type &b) const {
-				return std::make_tuple(a.second.size(), a.first.size()) < std::make_tuple(b.second.size(), b.first.size());
-			}
-		};
-		std::vector<std::set<int>> valid_param_indices;	
-		result_type (*func)(std::vector<param_type>&, std::vector<int>&); // params, sizes
-
-		bool is_valid(std::vector<param_type> &pms) const {
-			return std::all_of(pms.begin(), pms.end(), [&, i=0](param_type &p) mutable {return valid_param_indices[i++].count(p.index());});
-		}
-	};
-
 	static inline std::string ssuffix(int size) {
 		std::string re{};
 		switch (size) {
@@ -180,26 +165,8 @@ namespace x86_64 {
 	}
 
 	struct codegenerator {
-		std::map<st_type, std::vector<recipe>> recipes;
-		std::map<std::string, compilation_unit> func_compileunits;
-		compilation_unit global_cu;
-		std::vector<ext_function> ext_functions;
-		std::vector<std::unique_ptr<statement>> all_statements;
-
-		std::string text_section;
-		std::string bss_section;
-
-		codegenerator(tacoptimizecontext &&ctx);
-
 		void generate();
 		void prepare();
-
-	private:
-		recipe::result_type pick(st_type t, std::vector<param_type> params, std::vector<int> sizes) /* not refs as the funcs can modify them */;
-		void prepare_unit(compilation_unit *u);
-		void generate_unit(std::string label_name, compilation_unit &u);
-
-		std::pair<std::vector<param_type>, std::vector<int>> allocate_registers(compilation_unit &u);
 	};
 }
 

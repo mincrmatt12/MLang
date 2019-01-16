@@ -40,29 +40,5 @@ int main(int argc, char ** argv) {
 	tac_octx.optimize();
 
 	debug_dump_ctx(tac_octx);
-
-	if (arch == "x86_64") {
-		x86_64::codegenerator cg(std::move(tac_octx));
-		cg.generate();
-		
-		debug_dump_ctx(cg);
-
-		// Write output to a file
-		std::ofstream output(a.output_name);
-		output << ".bss" << std::endl << cg.bss_section << std::endl;
-		output << ".text" << std::endl << cg.text_section << std::endl;
-		output << ".globl main" << std::endl;
-		output << ".data" << std::endl;
-		for (int i = 0; i != tac_octx.string_table.size(); ++i) {
-			if (tac_octx.string_table[i] == '\0') {
-				tac_octx.string_table[i] = '0';
-				tac_octx.string_table.insert(tac_octx.string_table.begin()+i, '\\');
-			}
-		}
-		output << "___strtable: .ascii \"" << tac_octx.string_table << "\"" << std::endl;
-		
-		output.flush();
-		output.close();
-	}
 	return 0;
 }
