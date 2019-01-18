@@ -1,7 +1,6 @@
 pipeline {
 	agent {
-		docker {
-			image "rikorose/gcc-cmake:gcc-7"
+		dockerfile {
 			label "docker && linux"
 			args "-u 1001:1001"
 		}
