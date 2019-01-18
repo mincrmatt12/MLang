@@ -1,5 +1,5 @@
 # MLang
-![https://jenkins.mm12.xyz/jenkins/job/MLang/job/master](https://img.shields.io/jenkins/s/https/jenkins.mm12.xyz/jenkins/job/MLang/job/master.svg)
+[![](https://img.shields.io/jenkins/s/https/jenkins.mm12.xyz/jenkins/job/MLang/job/master.svg)](https://jenkins.mm12.xyz/jenkins/job/MLang/job/master)
 
 Excersise in writing a compiler for a made up language.
 
