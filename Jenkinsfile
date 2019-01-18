@@ -19,7 +19,7 @@ pipeline {
 		}
 		stage("Archive") {
 			steps {
-				archiveArtifacts artifacts: 'build/mcc', fingerprint: true
+				archiveArtifacts artifacts: 'build/mcc', fingerprint: true, onlyIfSuccessful: true
 			}
 		}
 	}
