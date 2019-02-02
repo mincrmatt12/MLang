@@ -274,6 +274,7 @@ public:
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
 	expression defun(const std::string& name, ex_rtype &&t)	{return define(name, identifier{id_type::function, func_list.size(), name, t});}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
+	expression defexternal(const std::string& name, ex_rtype &&t)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name, t});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
 	expression defparm(const std::string& name, ex_rtype t)	{
 		if (!parsing_function()) {
 			current_ext.num_args++;
@@ -369,8 +370,9 @@ defs: defs function
     | %empty;
 
 function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;}
-		| IDENTIFIER '<' typespec '>' {ctx.defun($1, M($3)); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($10)); --ctx;}
-extern_function: IDENTIFIER {ctx.defexternal($1);}'(' paramdecls ')' {ctx.add_ext_function(M($1));};
+		| IDENTIFIER '<' typespec '>' {ctx.defun($1, M($3)); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($10)); --ctx;};
+extern_function: IDENTIFIER {ctx.defexternal($1);}'(' paramdecls ')' {ctx.add_ext_function(M($1));}
+			   | IDENTIFIER '<' typespec '>' {ctx.defexternal($1, M($3));} '(' paramdecls ')' {ctx.add_ext_function(M($1));};
 
 paramdecls: paramdecl
 	  | paramdecl ',' ELLIPSIS {ctx.defvarargs();}
