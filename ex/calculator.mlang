@@ -1,5 +1,4 @@
-extern getchar();
-extern printf(fmt, ...);
+#include stdlib.mlang
 
 read_num() = {
 	var 8 o = getchar();	

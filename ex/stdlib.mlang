@@ -1,0 +1,9 @@
+// standard library definitions
+
+// in mlang, one can emulate "headers" with extern
+
+extern getchar<8>();
+extern printf(8* fmt, ...);
+extern scanf(8* fmt, ...);
+extern malloc(size);
+extern free(ptr);

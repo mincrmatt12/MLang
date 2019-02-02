@@ -60,7 +60,7 @@ extern int dumplevel;
 
 struct arg_info {
 	std::string input_name;
-	std::string output_name = "a.s";
+	std::string output_name = "a.out";
 };
 
 static void handle_m(std::string key, std::string val) {

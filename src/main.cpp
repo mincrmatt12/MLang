@@ -6,12 +6,18 @@
 #include "tac_optimize.h"
 #include "compiler.h"
 #include "codegen.h"
+#include "preprocess.h"
 
 int main(int argc, char ** argv) {
 	arg_info a = parseargs(argc, argv);
 	std::string filename = a.input_name;
 	std::ifstream f(filename);
-	std::string buffer(std::istreambuf_iterator<char>(f), {});
+	std::string buffer = preprocess_string(f, filename);
+
+	if (dumplevel >= 3) {
+		std::cout << "=== PREPROCESSED INPUT ===" << std::endl <<
+			      buffer;
+	}
 	
 	// setup the parser context
 	parsecontext ctx;

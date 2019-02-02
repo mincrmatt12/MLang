@@ -3,3 +3,7 @@ compile_commands.json
 .idea/
 *.png
 !*/*.png
+
+*.out
+*.s
+*.o

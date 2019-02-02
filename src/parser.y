@@ -475,9 +475,54 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '?' expr ':' expr		{ ensure_cast($3, $5); ensure_cast($5, $3); auto t = ctx.temp(M(ex_rtype($3.get_type()))); $$ = e_comma(e_l_or(e_l_and(M($1), e_comma(C(t) %= M($3), 1l)), C(t) %= M($5)), C(t));};
 %%
 
+std::string global_filename_parser;
+
+bool handle_pragma(const std::string& p, parsecontext& ctx) {
+	if (p.find(' ') == std::string::npos) {
+		return false;
+	}
+
+	std::string command = p.substr(0, p.find(' '));
+	std::cout << command << ";" << std::endl;
+	if (command == std::string{"line"}) {
+		ctx.loc.begin.line = std::stoi(p.substr(p.find(' ') + 1));
+		ctx.loc.begin.column = 1;
+		ctx.loc.end.line = ctx.loc.begin.line;
+		ctx.loc.end.column = ctx.loc.begin.column;
+		return true;
+	}
+	else if (command == std::string{"file"}) {
+		global_filename_parser = p.substr(p.find(' ') + 1);
+		ctx.loc.begin.filename = &global_filename_parser;
+		ctx.loc.begin.column = 1;
+		ctx.loc.begin.line = 1;
+		ctx.loc.end.line = ctx.loc.begin.line;
+		ctx.loc.end.column = ctx.loc.begin.column;
+		ctx.loc.end.filename = &global_filename_parser;
+		return true;
+	}
+	return false;
+}
+
 yy::mlang_parser::symbol_type yy::yylex(parsecontext& ctx) {
 	const char* anchor = ctx.cursor;
 	ctx.loc.step();
+	if (ctx.loc.begin.column == 1) {
+		if (*ctx.cursor == '#') {
+			++ctx.cursor;
+			anchor = ctx.cursor;
+			while (*ctx.cursor != '\n' && *ctx.cursor != '\0') ++ctx.cursor;
+			if (*ctx.cursor == '\0') throw yy::mlang_parser::syntax_error(ctx.loc, "EOF");
+			std::string in{anchor, static_cast<size_t>(ctx.cursor - anchor)};
+			ctx.loc.lines();
+			if (!handle_pragma(in, ctx)) {
+				throw yy::mlang_parser::syntax_error(ctx.loc, "Invalid pragma");
+			}
+			++ctx.cursor;
+			return yylex(ctx);
+		}
+	}
+
 	const char * re2c_marker;
 	auto s = [&](auto func, auto&&... params){ctx.loc.columns(ctx.cursor - anchor); return func(params..., ctx.loc);};
 	#define tk(t, ...) s(yy::mlang_parser::make_##t, ##__VA_ARGS__)
