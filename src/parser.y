@@ -187,27 +187,26 @@ inline expression cast(expression &&e, ex_rtype &&rt) {
 	return expression(std::forward<ex_rtype>(rt), std::forward<expression>(e));
 }
 
-static bool ensure_cast(expression &tgt, const expression &other) {
+static void ensure_cast(expression &tgt, const expression &other) {
 	auto tt = tgt.get_type(), ot = other.get_type();
 	if (ot.ptr != nullptr && tt.ptr == nullptr) {
 		// Cast the target to be a pointer type, as we can always upcast to a pointer
 		tgt = cast(std::move(tgt), std::move(ex_rtype(ot)));
-		return true;
+		return;
 	}
 	if (ot.ptr != nullptr && tt.ptr != nullptr) {
-		// Make sure the pointed to types are the same
-		return *ot.ptr == *tt.ptr;
-		// If that returned false, the ctx should throw a syntax error
+		// Pointer casts are alright, since they're often required to do various things
+		return;
 	}
 	if (tt.ptr != nullptr && ot.ptr == nullptr) {
-		return true; // Cast the other argument instead
+		return; // Cast the other argument instead
 	}
 	// There are no pointers, check if we would need a downcast
-	if (tt.size > ot.size) return true;
+	if (tt.size > ot.size) return;
 
 	// Otherwise, cast tt.size to ot.size
 	tgt = cast(std::move(tgt), std::move(ex_rtype(ot)));
-	return true;
+	return;
 }
 
 struct function {
@@ -273,6 +272,7 @@ public:
 	}
 	expression defglobvar(const std::string& name, ex_rtype t)	{(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); return define(name, identifier{id_type::global_var,       num_globals++, name, std::move(t)});}
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
+	expression defun(const std::string& name, ex_rtype &&t)	{return define(name, identifier{id_type::function, func_list.size(), name, t});}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
 	expression defparm(const std::string& name, ex_rtype t)	{
 		if (!parsing_function()) {
@@ -368,7 +368,8 @@ defs: defs function
     | defs "static" var_decl {ctx.defglobvar($3.name, $3.t); ctx.global_initializers.emplace_back(M($3.v));}';'
     | %empty;
 
-function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;};
+function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;}
+		| IDENTIFIER '<' typespec '>' {ctx.defun($1, M($3)); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($10)); --ctx;}
 extern_function: IDENTIFIER {ctx.defexternal($1);}'(' paramdecls ')' {ctx.add_ext_function(M($1));};
 
 paramdecls: paramdecl
@@ -601,7 +602,7 @@ ex_rtype expression::get_type() const {
 		case ex_type::cast:
 			return castvalue;
 		case ex_type::fcall:
-			return {};
+			return ident.t;
 		case ex_type::addr:
 			return {params.front().get_type(), true};
 		case ex_type::deref:
