@@ -18,14 +18,9 @@ std::string preprocess_string(std::istream &in, std::string filename) {
 				std::size_t pos = line.find(' ');
 				std::string command = line.substr(1, pos-1);
 
-				std::cout << "line: " << line << std::endl;
-				std::cout << "cmd: " << command + ";" << std::endl;
-
 				if (command == "include") {
-					std::cout << "oops" << std::endl;
 					if (pos == std::string::npos) throw std::runtime_error("invalid include: no filename");
 					else {
-						std::cout << "include "<< std::endl;
 						char * resolved = realpath(line.substr(pos + 1).c_str(), nullptr);
 						std::string resolved_path{resolved};
 						free(resolved);

@@ -483,7 +483,6 @@ bool handle_pragma(const std::string& p, parsecontext& ctx) {
 	}
 
 	std::string command = p.substr(0, p.find(' '));
-	std::cout << command << ";" << std::endl;
 	if (command == std::string{"line"}) {
 		ctx.loc.begin.line = std::stoi(p.substr(p.find(' ') + 1));
 		ctx.loc.begin.column = 1;
