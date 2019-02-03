@@ -128,6 +128,7 @@ addr_ref compiler::compile(const expression &expr) {
 		case ex_type::div:
 		case ex_type::comma:
 		case ex_type::gt:
+		case ex_type::mod:
 			// Reduce the parameters left to right into seperate stmts
 			{
 				for (auto &e : expr.params) {
@@ -137,6 +138,7 @@ addr_ref compiler::compile(const expression &expr) {
 						else if (is_div(expr)) { append(s_div(result = make(expr.get_type()), prev, last)); }
 						else if (is_eq(expr))  { append(s_eq(result = make(expr.get_type()), prev, last)); }
 						else if (is_gt(expr))  { append(s_gt(result = make(expr.get_type()), prev, last)); }
+						else if (is_mod(expr)) { append(s_mod(result = make(expr.get_type()), prev, last)); }
 						else                   { result = last; }
 					}
 				}

@@ -561,6 +561,25 @@ int  tacoptimizecontext::optimize_simplify() {
 				}
 				break;
 			}
+			case st_type::mod:
+			{
+				if (!do_tac_arith_constfold()) break;
+				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
+					// Ok, replace this statement with a literal mov
+					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
+								s->params[1].num % s->params[2].num & (1<<size_of_rtype(s->lhs().rt))-1
+					));
+					++modifications;
+					DUMP_T std::cout << "replaced mod with literal params" << std::endl;
+				}
+				if (ai_num(s->rhs()) && s->rhs().num == 1l) {
+					// this can be replaced with zero
+					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 0));
+					++modifications;
+					DUMP_T std::cout << "replaced mod % 1 with zero" << std::endl;
+				}
+				break;
+			}
 			case st_type::neg:
 			{
 				if (!do_tac_arith_constfold()) break;

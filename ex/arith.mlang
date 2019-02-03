@@ -1,0 +1,6 @@
+// testing modulo folding...
+#include stdlib.mlang
+
+testfold<64>(64 f) = {
+	printf("%d", f + 2);
+}

@@ -1,6 +1,6 @@
 #include stdlib.mlang
 
-read_num() = {
+read_num<64>() = {
 	var 8 o = getchar();	
 	if (o == ' ') return read_num();
 	else if (o >= '0' && o <= '9') {

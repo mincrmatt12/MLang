@@ -76,7 +76,7 @@ bool astoptimizecontext::is_pure(const expression &e, bool typeonly) {
 int astoptimizecontext::optimize_flatten(expression &e) {
 	int modifications = 0;
 	if (!do_flatten_tree()) return 0;
-	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e) || is_div(e)) {
+	if (is_add(e) || is_mul(e) || is_l_or(e) || is_l_and(e) || is_comma(e) || is_div(e) || is_mod(e)) {
 		// Adopt children of the same type as e
 		expr_vec new_args{};
 		for (auto &d : e.params) {
@@ -105,11 +105,11 @@ int astoptimizecontext::optimize_flatten(expression &e) {
 	}
 
 	switch (e.params.size()) {
-		case 1: if(is_add(e) || is_mul(e) || is_comma(e) || is_div(e)) {e = expression(std::move(e.params.front()));         ++modifications;}
-			else if (is_l_or(e) || is_l_and(e))                    {e = e_eq(e_eq(std::move(e.params.front()), 0l), 0l); ++modifications;}
+		case 1: if(is_add(e) || is_mul(e) || is_comma(e) || is_div(e) || is_mod(e)) {e = expression(std::move(e.params.front()));         ++modifications;}
+			else if (is_l_or(e) || is_l_and(e))                                     {e = e_eq(e_eq(std::move(e.params.front()), 0l), 0l); ++modifications;}
 			break;
-		case 0: if (is_add(e) || is_mul(e) || is_l_or(e) || is_div(e)) {e = 0l;                                              ++modifications;}
-			else if (is_l_and(e))                                  {e = 1l;                                              ++modifications;}
+		case 0: if (is_add(e) || is_mul(e) || is_l_or(e) || is_div(e) || is_mod(e)) {e = 0l;                                              ++modifications;}
+			else if (is_l_and(e))                                                   {e = 1l;                                              ++modifications;}
 	}
 	return modifications;
 }
@@ -169,6 +169,7 @@ int astoptimizecontext::optimize_deadcode(expression &e) {
 					case ex_type::addr:
 					case ex_type::deref:
 					case ex_type::comma:
+					case ex_type::mod:
 						auto tmp(std::move(i->params));
 						DUMP_T std::cout << "adopted parameters from sub-expr" << std::endl;
 						e.params.splice(i = e.params.erase(i), std::move(tmp));
@@ -227,7 +228,7 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	//
 	// which is then optimized further by the tree flatenner
 	if (is_add(e) || is_mul(e) || (
-		is_div(e) && std::all_of(e.params.begin(), e.params.end(), is_literal_number)				
+		(is_div(e) || is_mod(e)) && std::all_of(e.params.begin(), e.params.end(), is_literal_number)				
 	)) {
 		// Make sure there are at least two numerical arguments to avoid pessimization
 		if (std::count_if(e.params.begin(), e.params.end(), is_literal_number) >= 2) {
@@ -243,6 +244,7 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 				case ex_type::add: aggregate = std::accumulate(constants.begin(), constants.end(), 0)                          ; break ;
 				case ex_type::mul: aggregate = std::accumulate(constants.begin(), constants.end(), 1, std::multiplies<long>()) ; break ;
 				case ex_type::div: aggregate = std::accumulate(++constants.begin(), constants.end(), *(constants.begin()), std::divides<long>()) ; break ;
+				case ex_type::mod: aggregate = std::accumulate(++constants.begin(), constants.end(), *(constants.begin()), std::modulus<long>()) ; break ;
 				default: break                                                                                                 ;
 			}
 
@@ -293,7 +295,8 @@ int astoptimizecontext::optimize_arith_constfold(expression &e) {
 	// For divide, only check if the first parameter is a zero.
 	//
 	if ((is_mul(e) && std::any_of(e.params.begin(), e.params.end(), [&](expression &d){return is_literal_number(d) && d.numvalue == 0;})) || 
-	    (is_div(e) && e.params.size() >= 1 && is_literal_number(e.params.front()) && e.params.front().numvalue == 0)) {
+	    (is_div(e) && e.params.size() >= 1 && is_literal_number(e.params.front()) && e.params.front().numvalue == 0) ||
+		(is_mod(e) && std::any_of(e.params.begin(), e.params.end(), [&](expression &d){return is_literal_number(d) && d.numvalue == 1;}))) {
 		++modifications;
 		e = 0l;
 	}
@@ -493,16 +496,16 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 	//
 	// where all parameters are casted to the same value and all parameters are the exact same
 	
-	if (is_add(e) || is_mul(e) || is_div(e) || is_eq(e) || is_gt(e)) {
+	if (is_add(e) || is_mul(e) || is_div(e) || is_eq(e) || is_gt(e) || is_mod(e)) {
 		if (e.params.size() > 0) {
 			if (is_cast(e.params.front())) {
 				if (std::all_of(e.params.begin(), e.params.end(), [&](auto &p){
-					return is_cast(p) && p.castvalue == e.params.front().castvalue			;
+					return is_cast(p) && p.castvalue == e.params.front().castvalue;
 				})) {
 					// They are all casted, now make sure each of the types are equal
 					ex_rtype rtt = ex_rtype(e.params.front().castvalue);
 					if (std::all_of(e.params.begin(), e.params.end(), [&](auto &p){
-						return p.params.front().get_type() == e.params.front().params.front().get_type()			;
+						return p.params.front().get_type() == e.params.front().params.front().get_type();
 					})) {
 						for (auto &f : e.params) {
 							f = expression(std::move(f.params.front()));

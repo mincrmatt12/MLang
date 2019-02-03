@@ -83,7 +83,7 @@ ENUM_ADDR_REFS(o)
 #define ENUM_STATEMENTS(o) \
 	o(nop) /* do nothing */ \
 	o(mov) /* p0 <- p1 copy a register to another register. */ \
-	o(add) o(mul) o(div) /* p0 <- p1 @ p2 do arithmetic on register to another register */ \
+	o(add) o(mul) o(div) o(mod) /* p0 <- p1 @ p2 do arithmetic on register to another register */ \
 	o(neg) /* p0 <- -p1 */ \
 	o(ifnz)	/* if not zero, jump */ \
 	o(read) o(write) /* read/write derefs */ \

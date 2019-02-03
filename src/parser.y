@@ -112,7 +112,7 @@ struct identifier {
 
 #define ENUM_EXPRESSIONS(o) \
 	o(nop) o(string_ref) o(literal_number) o(ident) /* nop, atomic types (char is converted to a literal number before here) */\
-	o(add) o(neg) o(mul) o(div) o(eq) o(gt)		/* arithmetic operators (sub is converted from neg + add) mul does not have a simpler repr, overrideable with smath_mul func */ \
+	o(add) o(neg) o(mul) o(mod) o(div) o(eq) o(gt)		/* arithmetic operators (sub is converted from neg + add) mul does not have a simpler repr, overrideable with smath_mul func */ \
 	o(l_or) o(l_and) o(loop)			/* logical loop is while (param0) do param 1.. */ \
 	o(addr) o(deref)				/* pointer arithmetic */ \
 	o(fcall)					/* call param0 with param 1.. n */ \
@@ -435,11 +435,8 @@ expr: STR_CONST				{ $$ = M($1);}
     | expr '+' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), M($3));}
     | expr '-' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_add(M($1), e_neg(M($3)));}
     | expr '*' expr       %prec '/'	{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_mul(M($1), M($3));}
-    | expr '%' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
-    				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
-					  $$ = e_comma(M($$), e_add(C($1), e_neg(e_mul(e_div(C($1), C($3)), M($3)))));    // calculate a % b with a + -((a / b) * b)
-					}
     | expr '/' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_div(M($1), M($3));}
+    | expr '%' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_mod(M($1), M($3));}
     | expr '<' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); if ($1.has_side_effects()) { $$ = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $1 = e_deref(C($$.params.back()));}
     				   	  if ($3.has_side_effects()) { $$ = e_comma(M($$), ctx.temp(M(ex_rtype($3.get_type(), true))) %= e_addr(M($3))); $3 = e_deref($$.params.back().params.back());}
 					  $$ = e_comma(M($$), e_eq(e_l_or(e_eq(C($1), C($3)), e_gt(C($1), C($3))), 0l)); }
@@ -670,6 +667,9 @@ ex_rtype expression::get_type() const {
 		case ex_type::ret:
 		case ex_type::add:
 		case ex_type::neg:
+		case ex_type::mul:
+		case ex_type::div:
+		case ex_type::mod:
 			{
 				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
 					for (auto &e : params) {
@@ -679,34 +679,6 @@ ex_rtype expression::get_type() const {
 				else {
 					if (params.size() == 0) return {64, false};
 					return params.front().get_type();
-				}
-			}
-		case ex_type::mul:
-			{
-				// Ptr types in multiplications are always the same size
-				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
-					for (auto &e : params) {
-						if (e.get_type().ptr != nullptr) return e.get_type();
-					}
-				}
-				else {
-					if (params.size() == 0) return {64, false};
-					auto a = params.front().get_type();
-					return a;
-				}
-			}
-		case ex_type::div:
-			{
-				// Ptr types in multiplications are always the same size
-				if (std::any_of(params.begin(), params.end(), [](auto &e){return e.get_type().ptr != nullptr;})) {
-					for (auto &e : params) {
-						if (e.get_type().ptr != nullptr) return e.get_type();
-					}
-				}
-				else {
-					if (params.size() == 0) return {64, false};
-					auto a = params.front().get_type();
-					return a;
 				}
 			}
 	}
