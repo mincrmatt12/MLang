@@ -92,7 +92,9 @@ ENUM_ADDR_REFS(o)
 	o(addrof) /* get the physical address of p1 and put it into p0. should be implemented with a simple constant store at the compile level */ \
 	o(str) /* kludge to get a pointer to the string table and place it into the target. if constants are added they will be stored with this type 
 		  after it is renamed */ \
-	o(cast)
+	o(cast) /* perform 0-based casting between registers */ \
+	/* Special Insns -- combined versions of other ones to make the job of codegen easier */ \
+	o(ifeq) o(ifgt)
 
 #define o(n) n, 
 enum struct st_type {
@@ -117,8 +119,10 @@ struct statement {
 	template<typename ...T>
 	void reinit(T&&... r) {
 		auto n = next;
+		auto c = cond;
 		*this = statement(std::forward<T>(r)...);
 		next = n;
+		cond = c;
 	}
 
 	void make_nop() {reinit(st_type::nop);}
@@ -138,6 +142,8 @@ struct statement {
 			case st_type::write:
 			case st_type::ret:
 			case st_type::ifnz:
+			case st_type::ifeq:
+			case st_type::ifgt:
 			case st_type::fcall:
 				return true;
 			default:
@@ -154,6 +160,10 @@ inline bool si_##n(const statement &e) { \
 }
 ENUM_STATEMENTS(o)
 #undef o
+
+inline bool si_if(const statement &e) {
+	return si_ifnz(e) || si_ifeq(e) || si_ifgt(e);
+}
 
 //
 // Allocation of registers requires access to a compilation unit which knows how many local variables and parameters there are. (params take up 0-nparams, 
@@ -252,6 +262,8 @@ void statement::for_all_read(T&& f) {
 		case st_type::write:
 		case st_type::ret:
 		case st_type::ifnz:
+		case st_type::ifeq:
+		case st_type::ifgt:
 			call_reg_func(f, params.begin(), params.end());
 			return;
 		default:
@@ -267,6 +279,8 @@ void statement::for_all_write(T&& f) {
 		case st_type::write:
 		case st_type::ret:
 		case st_type::ifnz:
+		case st_type::ifeq:
+		case st_type::ifgt:
 			return;
 		default:
 			call_reg_func(f, params.front());

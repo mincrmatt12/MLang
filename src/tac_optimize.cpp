@@ -379,21 +379,23 @@ int  tacoptimizecontext::optimize_jumpthread() {
 
 	traverse_f(optimizing->start, [&](statement *s){
 			// Check if the pointed at statement is an ifnz, and the next statement is an ifnz, and the parameters are the same
-			while (do_jumpthread() && si_ifnz(*s) && s->next != nullptr && si_ifnz(*s->next) && s->lhs() == s->next->lhs() && !s->lhs().is_volatile()
+			while (do_jumpthread() && si_if(*s) && s->next != nullptr && si_if(*s->next) && s->t == s->cond->t && s->lhs() == s->next->lhs() && !s->lhs().is_volatile() 
+					&& s->rhs() == s->next->rhs() && !s->rhs().is_volatile()
 					&& s->next != s->next->next) {
 				// next pointer is only executed if condition is false, the condition is always
 				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
 				// from the first statement
-				DUMP_T std::cout << "ifnz threaded" << std::endl;
+				DUMP_T std::cout << "if threaded" << std::endl;
 				++modifications;
 				s->next = s->next->next;
 			}
-			while (do_jumpthread() && si_ifnz(*s) && s->cond != nullptr && si_ifnz(*s->cond) && s->lhs() == s->cond->lhs() && !s->lhs().is_volatile()
+			while (do_jumpthread() && si_if(*s) && s->cond != nullptr && si_if(*s->cond) && s->t == s->cond->t && s->lhs() == s->cond->lhs() && !s->lhs().is_volatile()
+					&& s->rhs() == s->cond->rhs() && !s->rhs().is_volatile()
 					&& s->cond != s->cond->cond) {
 				// next pointer is only executed if condition is false, the condition is always
 				// false since lhs is not volatile. this means that the cond pointer is never ran, so the entire statement can be skipped
 				// from the first statement
-				DUMP_T std::cout << "ifnz threaded" << std::endl;
+				DUMP_T std::cout << "if threaded (cond)" << std::endl;
 				++modifications;
 				s->cond = s->cond->cond;
 			}
@@ -406,10 +408,24 @@ int  tacoptimizecontext::optimize_jumpthread() {
 				DUMP_T std::cout << "literal ifnz hardcoded (type 1)" << std::endl;
 				++modifications;
 			}
-
-			while (do_remove_redundant_ifnz() && si_ifnz(*s) && s->next == s->cond) {
+			while (do_literal_jump_hardcode() && si_ifeq(*s) && s->lhs() == s->rhs() && !s->lhs().is_volatile()) {
+				// hardcode the jump
+				s->next = s->cond;
 				s->make_nop();
-				DUMP_T std::cout << "redundant ifnz removed" << std::endl;
+				DUMP_T std::cout << "literal ifeq hardcoded (type 1)" << std::endl;
+				++modifications;
+			}
+			while (do_literal_jump_hardcode() && si_ifgt(*s) && ai_num(s->lhs()) && ai_num(s->rhs())) {
+				// hardcode the jump
+				s->next = (s->lhs().num > s->rhs().num) ? s->cond : s->next;
+				s->make_nop();
+				DUMP_T std::cout << "literal ifgt hardcoded (type 1)" << std::endl;
+				++modifications;
+			}
+
+			while (do_remove_redundant_ifnz() && si_if(*s) && s->next == s->cond) {
+				s->make_nop();
+				DUMP_T std::cout << "redundant if removed" << std::endl;
 				++modifications;
 			}
 
@@ -609,8 +625,53 @@ int  tacoptimizecontext::optimize_simplify() {
 									DUMP_T std::cout << "swapped cond&next for !=" << std::endl;
 								}
 							} 
+
+							// Otherwise, try to make an ifeq
+							
+							// Check if all operands to the EQ are still accessible at the time of the ifnz
+							if (info.data[stmt_src].parameters[0].size() == 1 && std::all_of(++stmt_src->params.begin(), stmt_src->params.end(), [&,i=1](auto &rf) mutable {
+								int other = i++;
+								return !ai_reg(rf) || info.data[stmt_src].parameters[other] == info.data[s].everything[rf.num];
+							})) {
+								// Alright, we can create an ifeq
+								s->reinit(st_type::ifeq, stmt_src->params[1], stmt_src->params[2]);
+								stmt_src->make_nop();
+								++modifications;
+								DUMP_T std::cout << "replaced if+eq with ifeq" << std::endl;
+							}
+						}
+						else if (si_gt(*stmt_src)) {
+							// Try to create a ifgt
+							// Check if all operands to the gt are still accessible at the time of the ifnz
+							if (info.data[stmt_src].parameters[0].size() == 1 && std::all_of(++stmt_src->params.begin(), stmt_src->params.end(), [&,i=1](auto &rf) mutable {
+								int other = i++;
+								return !ai_reg(rf) || info.data[stmt_src].parameters[other] == info.data[s].everything[rf.num];
+							})) {
+								// Alright, we can create an ifeq
+								s->reinit(st_type::ifgt, stmt_src->params[1], stmt_src->params[2]);
+								stmt_src->make_nop();
+								++modifications;
+								DUMP_T std::cout << "replaced if+gt with ifgt" << std::endl;							
+							}
 						}
 					}
+				}
+				break;
+			}
+			case st_type::ifeq:
+			{
+				// Check if one of our parameters is a zero. If so, replace with a ifnz with cond and next swapped.
+				int other;
+				if (std::count_if(s->params.begin(), s->params.end(), [&,i=0](auto &rf) mutable {
+							int index = i++;
+							if (!ai_num(rf)) { other = index; return false; }
+							return rf.num == 0;
+				}) == 1) {
+					addr_ref condition = s->params[other];
+					s->reinit(st_type::ifnz, std::move(condition));
+					std::swap(s->next, s->cond);
+					++modifications;
+					DUMP_T std::cout << "replaced ifeq == 0 with !ifnz" << std::endl;
 				}
 				break;
 			}

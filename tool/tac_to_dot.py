@@ -17,7 +17,7 @@ def read_instructions():
             # grab the label
             labelname.append(line.split(".")[1])
             j = True
-        if line.startswith("  ifnz"):
+        if line.startswith("  if"):
             labelname.append(line.split(".")[1])
         if line.startswith("  ret"):
             j = True

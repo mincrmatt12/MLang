@@ -58,9 +58,13 @@ extern std::string arch;
 
 extern int dumplevel;
 
+extern std::vector<std::string> include_dirs;
+
 struct arg_info {
 	std::string input_name;
 	std::string output_name = "a.out";
+	std::vector<std::string> linker_params{};
+	std::vector<std::string> assembler_params{};
 };
 
 static void handle_m(std::string key, std::string val) {

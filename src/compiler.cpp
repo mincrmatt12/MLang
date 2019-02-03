@@ -157,7 +157,7 @@ addr_ref compiler::compile(const expression &expr) {
 			{
 				// First, compile the target expression that will be called
 				std::vector<addr_ref> parameters{};
-				parameters.push_back(result = make(ex_rtype{expr.ident.t}));
+				parameters.push_back(result = make(ex_rtype{expr.params.front().get_type()}));
 				for (auto i = expr.params.begin(); i != expr.params.end(); ++i) {
 					parameters.emplace_back(std::move(compile(*i)));
 				}
