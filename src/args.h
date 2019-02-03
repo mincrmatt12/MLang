@@ -114,6 +114,11 @@ static arg_info parseargs(int argc, char ** argv) {
 		}
 	}
 
+	auto pos = a.input_name.rfind('/');
+	if (pos != std::string::npos) {
+		include_dirs.push_back(a.input_name.substr(0, pos));
+	}
+
 	setup_optimize(oplevel);
 	
 	for (auto &arg : arguments) {
