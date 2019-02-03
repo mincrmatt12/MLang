@@ -89,7 +89,7 @@ addrof:
 str:
  - lea $0, [rel <str name>] / reg  "
 ret:
- - mov eax, $0 / (reg,mem,imm)
+ - mov rax, $0 / (reg,mem,imm)
  - / reg(a:)
 
 
