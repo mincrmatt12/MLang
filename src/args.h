@@ -32,13 +32,13 @@ o(0, 0, 1, replace_ifnz_literals, 11) \
 o(1, 1, 1, jumpthread, 12) \
 o(0, 1, 1, literal_jump_hardcode, 13) \
 o(1, 1, 1, remove_redundant_ifnz, 14) \
-o(0, 1, 1, remove_tail_call, 15) \
+o(0, 0, 1, remove_tail_call, 15) \
 o(0, 1, 1, tac_arith_constfold, 16) \
 o(0, 1, 1, tac_logic_constfold, 17) \
 o(0, 1, 1, swap_cond_next, 18) \
 o(1, 1, 1, remove_useless_mov, 19) \
 o(1, 1, 1, remove_fcall_result_cast, 20) \
-o(0, 0, 1, rename_registers, 21) \
+o(0, 1, 1, rename_registers, 21) \
 o(0, 1, 1, remap_registers, 22)
 
 static void setup_optimize(int level) {
