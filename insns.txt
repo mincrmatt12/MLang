@@ -111,11 +111,13 @@ use this algorithm to match others:
 where
 
 BACKUP(a, b) = 
-	if a in CLOBBER or PARAMS
-		add to CLOBBER a, MOV B, A
+	if NOT USED a
+		MOV B, A
 	else
-		add to preops XCHG a, b
-		add to postops XCHG a, b
+		add to preops push a
+		mov A, B
+		add to postops pop a
+		
 
 GETCLOBBER(a, b) = 
 	get a temp register
@@ -125,6 +127,7 @@ DESIRED | CURRENT | OPERATION
 sameas(0) | any | gen a mov(target, current), then generate OP(target, target, other)
 reg(X) | read (reg,mem) | backup(current, target)
 reg | read (mem,imm) | if (clobberavail) mov(GETCLOBBER, current) else BACKUP(GETCLOBBER, current)
+reg | clobbered |               "
 
 if write, copy DESIRED back to CURRENT before re-xchging
 
