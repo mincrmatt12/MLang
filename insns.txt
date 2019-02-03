@@ -1,0 +1,127 @@
+Instruction conversion table (for thinking)
+
+-- x86 --
+
+nop:
+ - nop
+
+mov:
+ - mov %0, %1 / reg, (reg, imm)
+ - mov %0, %1 / mem, (reg, imm)
+
+add:
+ - inc %0 / (reg, mem), sameas(0), 1
+ - dec %0 / (reg, mem), sameas(0), -1
+ - add %0, %1 / reg, sameas(0), (reg, mem)
+ - add %0, %1 / mem, sameas(0), reg
+ - add %0, %1 / (reg, mem), imm
+ - lea %0, [%1 + %2], / reg, reg, (reg, imm)
+ 
+mul:
+ - imul %0, %1 / reg, sameas(0), (reg, mem)
+ - imul %0, %1, %2 / reg, (reg, mem), imm
+
+div:
+ - idiv %0 | xor ah, ah / reg(a:wb), sameas(0), (reg,mem)(:b)
+ - cwd | idiv %2 / reg(a:w), sameas(0), (reg,mem)(:w) / d
+ - cdq | idiv %2 / reg(a:l), sameas(0), (reg,mem)(:l) / d
+ - cqo | idiv %2 / reg(a:q), sameas(0), (reg,mem)(:q) / d
+ - mov ax, %1 | cwd | idiv %2 | mov %0, ax / (reg,mem,imm)(w), (reg,mem,imm)(w), (reg,mem)(w) / a, d
+ - mov eax, %1 | cdq | idiv %2 | mov %0, eax / (reg,mem,imm)(l), (reg,mem,imm)(l), (reg,mem)(l) / a, d
+ - mov rax, %1 | cqo | idiv %2 | mov %0, rax / (reg,mem,imm)(q), (reg,mem,imm)(q), (reg,mem)(l) / a, d
+
+mod:
+ - idiv %0 | shr ax, 8 / reg(a:wb), sameas(0), (reg,mem)(:b)
+ - cwd | idiv %2 / reg(a:w), reg(d:w), (reg,mem)(:w) / d
+ - cdq | idiv %2 / reg(a:l), reg(d:w), (reg,mem)(:l) / d
+ - cqo | idiv %2 / reg(a:q), reg(d:w), (reg,mem)(:q) / d
+ - mov ax, %1 | cwd | idiv %2 | mov %0, dx / (reg,mem,imm)(w), (reg,mem,imm)(w), (reg,mem)(w) / a, d
+ - mov eax, %1 | cdq | idiv %2 | mov %0, edx / (reg,mem,imm)(l), (reg,mem,imm)(l), (reg,mem)(l) / a, d
+ - mov rax, %1 | cqo | idiv %2 | mov %0, rdx / (reg,mem,imm)(q), (reg,mem,imm)(q), (reg,mem)(l) / a, d
+
+neg:
+ - neg %0 / (reg, mem), sameas(0)
+ - imul %0, %1, -1 / reg, (reg, mem)
+
+ifnz:
+ - cmp %0, 0 | jne LOC / (reg,mem)
+
+ifeq:
+ - cmp %0, %1 | je LOC / (reg,mem), (reg,imm)
+
+ifgt:
+ - cmp %0, %1 | ja LOC / (reg,mem), (reg,imm)
+ - cmp %0, %1 | ja LOC / (reg), (reg, mem)
+
+read:
+     < swap in table, i'm too lazy to fix it >
+ - movzx r%1, byte ptr [%0] / reg(:b), reg(:bptr)
+ - movzx r%1, word ptr [%0] / reg(:w), reg(:wptr)
+ - xor r%1, r%1 | mov %0, dword ptr %1 / reg(:l), reg(:lptr)
+ - xor r%1, r%1 | mov %0, qword ptr %1 / reg(:q), reg(:wptr)
+
+write:
+ - mov X ptr [%1], %0 | reg, (reg, imm)
+   < .. ptr types .. >
+
+eq:
+ - cmp %1, %2 | sete %0 / (reg, mem), (reg,mem), (reg,imm)
+
+gt:
+ - cmp %1, %2 | seta %0 / (reg, mem), (reg,mem), (reg,imm)
+ - cmp %1, %2 | seta %0 / (reg, mem), (reg), (reg,mem)
+
+cast:
+ - movsx %0, %1 / reg(:wdq), (reg,mem)(b)
+ - movsx %0, %1 / reg(:dq), (reg,mem)(w)
+ - movsx %0, %1 / reg(:q), (reg,mem)(d)
+ - xor r%0, r%0 / mov %0, %1 reg(:b), (reg,mem)(:wdq)
+ - xor r%0, r%0 / mov %0, %1 reg(:w), (reg,mem)(:dq)
+ - xor r%0, r%0 / mov %0, %1 reg(:d), (reg,mem)(:q)
+ - mov %0, 0 / mov %0, %1 mem(:b), reg(:wdq)
+ - mov %0, 0 / mov %0, %1 mem(:w), reg(:dq)
+ - mov %0, 0 / mov %0, %1 mem(:d), reg(:q)
+
+fcall <special>
+addrof:
+ - lea $0, [rel $1] / reg, ident
+str:
+ - lea $0, [rel <str name>] / reg
+ret <special>
+
+
+logic:
+
+stage 1:
+see if anything matches off the bat, rate on order
+
+stage 2:
+try to match dest, ensuring size
+
+fail?
+pick option with least possible clobbers, that matches size and:
+
+stage 3:
+
+use this algorithm to match others:
+
+where
+
+BACKUP(a, b) = 
+	if a in CLOBBER or PARAMS
+		add to CLOBBER a, MOV B, A
+	else
+		add to preops XCHG a, b
+		add to postops XCHG a, b
+
+GETCLOBBER(a, b) = 
+	get a temp register
+
+
+DESIRED | CURRENT | OPERATION
+sameas(0) | any | gen a mov(target, current), then generate OP(target, target, other)
+reg(X) | read (reg,mem) | backup(current, target)
+reg | read (mem,imm) | if (clobberavail) mov(GETCLOBBER, current) else BACKUP(GETCLOBBER, current)
+
+if write, copy DESIRED back to CURRENT before re-xchging
+
