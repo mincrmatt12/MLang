@@ -55,16 +55,12 @@ OPTIMIZE_FLAGS(o)
 #undef o
 
 extern std::string arch;
-
 extern int dumplevel;
-
 extern std::vector<std::string> include_dirs;
 
 struct arg_info {
 	std::string input_name;
 	std::string output_name = "a.out";
-	std::vector<std::string> linker_params{};
-	std::vector<std::string> assembler_params{};
 };
 
 static void handle_m(std::string key, std::string val) {
@@ -105,8 +101,16 @@ static arg_info parseargs(int argc, char ** argv) {
 					if (ent.find('=') == std::string::npos) break;
 					handle_m(ent.substr(0, ent.find('=')), ent.substr(ent.find('=')+1));
 				}
-			default:
 				break;
+			case 'I':
+				{
+					include_dirs.push_back(arg.substr(2));
+				}
+				break;
+			case 'f':
+				break;
+			default:
+				throw std::runtime_error("Unrecognized commandline flag: " + arg);
 		}
 	}
 
@@ -119,7 +123,7 @@ static arg_info parseargs(int argc, char ** argv) {
 
 			if (arg.size() == 2) continue;
 			OPTIMIZE_FLAGS(o)
-			else throw std::runtime_error("Unrecognized commandline flag");
+			else throw std::runtime_error("Unrecognized commandline flag: " + arg);
 #undef o
 		}
 	}
