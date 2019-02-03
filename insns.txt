@@ -84,9 +84,9 @@ cast:
 
 fcall <special>
 addrof:
- - lea $0, [rel $1] / reg, ident
+ - lea $0, [rel $1] / reg, ident (rel is ommitted if called for static libs)
 str:
- - lea $0, [rel <str name>] / reg
+ - lea $0, [rel <str name>] / reg  "
 ret <special>
 
 
