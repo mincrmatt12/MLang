@@ -383,7 +383,7 @@ paramdecl: paramdecl ',' typespec IDENTIFIER {ctx.defparm($4, $3);}
 var_decl: typespec IDENTIFIER '=' expr		{ $$ = {M($2), M($4), M($1)};}
 	| typespec IDENTIFIER			{ $$ = {M($2), 0l, M($1)};};
 
-typespec: INT_LITERAL			{ $$ = ex_rtype($1, false);}
+typespec: INT_LITERAL			{ if (!($1 == 8 || $1 == 16 || $1 == 32 || $1 == 64)) throw yy::mlang_parser::syntax_error(ctx.loc, "Invalid size"); $$ = ex_rtype($1, false);}
 	| typespec '*'			{ $$ = ex_rtype($1, true);}
 	| %empty			{ $$ = {};};
 
