@@ -25,33 +25,42 @@
 #include "tac_optimize.h"
 
 namespace x86_64 {
-	// Define registers.
-	// Each register has various names to correspond to the different sizes.
-	enum struct reg_name : unsigned char {
-		a,
-		b,
-		c,
-		d,
-		si,
-		di,
-		r8,
-		r9,
-		r10,
-		r11,
-		r12,
-		r13,
-		r14,
-		r15
+	enum struct p_size {
+		BYTE,
+		WORD,
+		DWORD,
+		QWORD
 	};
 
-	// Define an instruction mechanism, similar to how TAC works, with the linked list.
-	struct instruction {
+	struct match_t {
+		enum type {
+			REG,
+			MEM,
+			IMM,
+			SAMEAS
+		};
+
+		std::set<type> valid_types;
+		std::set<p_size> valid_sizes;
+		int parm;
+	};
+
+	const char * registers[4][14] = {
+		{"al"  , "bl"  , "cl"  , "dl"  , "sil" , "dil" , "r8b" , "r9b" , "r10b" , "r11b" , "r12b" , "r13b" , "r14b" , "r15b"},
+		{"ax"  , "bx"  , "cx"  , "dx"  , "si"  , "di"  , "r8w" , "r9w" , "r10w" , "r11w" , "r12w" , "r13w" , "r14w" , "r15w"},
+		{"eax" , "ebx" , "ecx" , "edx" , "esi" , "edi" , "r8d" , "r9d" , "r10d" , "r11d" , "r12d" , "r13d" , "r14d" , "r15d"},
+		{"rax" , "rbx" , "rcx" , "rdx" , "rsi" , "rdi" , "r8"  , "r9"  , "r10"  , "r11"  , "r12"  , "r13"  , "r14"  , "r15"} 
+	};
+
+	struct recipe {
+		int priority;
+		st_type type;
+		std::string pattern;
+		
 
 	};
 
 	struct codegenerator {
-		void generate();
-		void prepare();
 	};
 }
 

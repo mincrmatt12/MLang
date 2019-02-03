@@ -82,12 +82,15 @@ cast:
  - mov %0, 0 / mov %0, %1 mem(:w), reg(:dq)
  - mov %0, 0 / mov %0, %1 mem(:d), reg(:q)
 
-fcall <special>
+fcall <handled specially>
+
 addrof:
  - lea $0, [rel $1] / reg, ident (rel is ommitted if called for static libs)
 str:
  - lea $0, [rel <str name>] / reg  "
-ret <special>
+ret:
+ - mov eax, $0 / (reg,mem,imm)
+ - / reg(a:)
 
 
 logic:
