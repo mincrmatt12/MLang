@@ -19,13 +19,15 @@ namespace x86_64 {
 #define AnyS      {p_size::BYTE, p_size::WORD, p_size::DWORD, p_size::QWORD}
 #define WordS     {p_size::WORD, p_size::DWORD, p_size::QWORD}
 #define DWordS    {p_size::DWORD, p_size::QWORD}
+#define MDWordS   {p_size::BYTE, p_size::WORD, p_size::DWORD}
+#define MWordS    {p_size::BYTE, p_size::WORD}
 #define SameAs(x) {{match_t::SAMEAS}, {}, x}
 #define Reg(x, s) {{match_t::REG}, s, x}
 #define AnyReg(s) {{match_t::REG}, s, ~0}
 #define RegMem(s) {{match_t::REG, match_t::MEM}, s, ~0}
 #define Any(s)	  {{match_t::REG, match_t::MEM, match_t::IMM}, s, ~0}
-#define RegImm    {{match_t::REG, match_t::IMM}, AnyS, ~0}
-#define Imm       {{match_t::IMM}, AnyS, ~0}
+#define RegImm(s) {{match_t::REG, match_t::IMM}, s, ~0}
+#define Imm(s)    {{match_t::IMM}, s, ~0}
 #define Mem(s)    {{match_t::MEM}, s, ~0}
 #define Const(x)  {{match_t::CONSTIMM}, AnyS, x}
 #define Ident     {{match_t::IDENT}, AnyS, 0}
@@ -34,18 +36,19 @@ namespace x86_64 {
 		/* NOP */
 		{10, st_type::nop, "nop", {}},
 		/* MOV */
-		{10, st_type::mov,  "mov %0, %1", {AnyReg(AnyS), RegImm}},
-		{11, st_type::mov,  "mov %0, %1", {Mem(AnyS), RegImm}},
+		{10, st_type::mov,  "mov %0, %1", {AnyReg(AnyS), RegImm(AnyS)}},
+		{11, st_type::mov,  "mov %0, %1", {Mem(AnyS), AnyReg(AnyS)}},
+		{11, st_type::mov,  "mov %0, %1", {Mem(AnyS), Imm(MDWordS)}},
 		/* ADD */
 		{ 9, st_type::add,  "inc %0", {RegMem(AnyS), SameAs(0), Const(1)}},
 		{ 9, st_type::add,  "dec %0", {RegMem(AnyS), SameAs(0), Const(-1)}},
 		{10, st_type::add,  "add %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::add,  "add %0, %2", {Mem(AnyS), SameAs(0), AnyReg(AnyS)}},
-		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm}},
-		{ 8, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), RegImm}},
+		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm(MDWordS)}},
+		{ 8, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), RegImm(AnyS)}},
 		/* MUL */
 		{10, st_type::mul,  "imul %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
-		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm}},
+		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm(MDWordS)}},
 		{ 9, st_type::mul,  "shl %0, 1", {RegMem(AnyS), SameAs(0), Const(2)}},
 		{ 9, st_type::mul,  "shl %0, 2", {RegMem(AnyS), SameAs(0), Const(4)}},
 		{ 9, st_type::mul,  "shl %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
@@ -68,9 +71,10 @@ namespace x86_64 {
 		/* IFNZ */
 		{10, st_type::ifnz, "cmp %0, 0 | jne %l", {RegMem(AnyS)}},
 		/* IFEQ */
-		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm}},
+		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(MDWordS)}},
+		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(MDWordS), RegMem(AnyS)}},
 		/* IFGT */
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), RegImm}},
+		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), RegImm(MDWordS)}},
 		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg({p_size::BYTE})}},
@@ -78,14 +82,15 @@ namespace x86_64 {
 		{11, st_type::read, "xor %q0, %q0 | mov %0, dword [%1]", {AnyReg({p_size::DWORD}), AnyReg({p_size::DWORD})}},
 		{11, st_type::read, "xor %q0, %q0 | mov %0, qword [%1]", {AnyReg({p_size::QWORD}), AnyReg({p_size::QWORD})}},
 		/* WRITE */
-		{10, st_type::write, "mov byte [%0], %1", {RegImm, AnyReg({p_size::BYTE})}},
-		{10, st_type::write, "mov word [%0], %1", {RegImm, AnyReg({p_size::WORD})}},
-		{10, st_type::write, "mov dword [%0], %1", {RegImm, AnyReg({p_size::DWORD})}},
-		{10, st_type::write, "mov qword [%0], %1", {RegImm, AnyReg({p_size::QWORD})}},
+		{10, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), AnyReg({p_size::BYTE})}},
+		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), AnyReg({p_size::WORD})}},
+		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), AnyReg({p_size::DWORD})}},
+		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), AnyReg({p_size::QWORD})}},
 		/* EQ */
-		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm}},
+		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(MDWordS)}},
+		{10, st_type::eq,   "cmp %2, %1 | sete %0 ", {RegMem(AnyS), RegImm(MDWordS), RegMem(AnyS)}},
 		/* GT */
-		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm}},
+		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
 		/* CAST */
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
@@ -169,7 +174,12 @@ namespace x86_64 {
 	}
 
 	p_size storage::get_size() const {
-		if (this->type == IMM) return p_size::QWORD;
+		if (this->type == IMM) {
+			unsigned long ul = imm_or_offset;
+			if (ul < 256u) return p_size::BYTE;
+			if (ul < 65536u) return p_size::WORD;
+			return p_size::DWORD;
+		}
 		switch (this->size) {
 			case 8:
 				return p_size::BYTE;
@@ -190,6 +200,7 @@ namespace x86_64 {
 				if (m.valid_types.count(match_t::IMM) + m.valid_types.count(match_t::CONSTIMM) == 0) return false;
 
 				if (m.valid_types.count(match_t::CONSTIMM) == 1 && m.parm != imm_or_offset) return false;
+				if (m.valid_types.count(match_t::IMM) == 1 && m.valid_sizes.count(get_size()) == 0) return false;
 				return true;
 			case REG:
 				if (m.valid_types.count(match_t::REG) == 0) return false;
@@ -254,7 +265,6 @@ namespace x86_64 {
 		void inline operator()(Args &&...args) {
 			result += (emit_helper(std::forward<Args>(args)) + ...) + '\n';
 		}
-
 	private:
 		std::string &result;
 	};
@@ -284,7 +294,21 @@ namespace x86_64 {
 
 		// Now, using a similar method to the debug printer, construct a list of labels.
 		
-		
+		auto labels = std::map<statement *, int>{};
+		auto stmts  = traverse_v(cu.start);
+
+		{
+			auto add_label = [&, l=0](statement * i) mutable {
+				if (labels.count(i) == 0) labels[i] = l++;
+			};
+
+			for (std::size_t i = 0; i < stmts.size(); ++i) {
+				auto st = stmts[i];
+				if (st->cond != nullptr) add_label(st->cond);
+				if (st->next != nullptr && stmts[i+1] != st->next) add_label(st->next);
+			}
+		}	
+
 		return result;
 	}
 	
