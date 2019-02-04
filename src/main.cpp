@@ -46,5 +46,11 @@ int main(int argc, char ** argv) {
 	tac_octx.optimize();
 
 	debug_dump_ctx(tac_octx);
+
+	if (arch == "x86_64" || arch == "amd64" || arch == "") {
+		x86_64::codegenerator gen(std::move(tac_octx));
+		std::ofstream out(a.output_name);
+		out << gen.generate();
+	}
 	return 0;
 }

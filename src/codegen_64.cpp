@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include "flow.h"
 
 namespace x86_64 {
 	const char * registers[4][14] = {
@@ -117,7 +118,7 @@ namespace x86_64 {
 #undef Const
 #undef Ident  
 
-	std::string storage::to_string(p_size rs) {
+	std::string storage::to_string(p_size rs) const {
 		switch (this->type) {
 			case GLOBAL:
 				switch (rs) {
@@ -163,13 +164,13 @@ namespace x86_64 {
 		}
 	}
 
-	std::string storage::to_string() {
+	std::string storage::to_string() const {
 		return to_string(get_size());
 	}
 
-	p_size storage::get_size() {
+	p_size storage::get_size() const {
 		if (this->type == IMM) return p_size::QWORD;
-		switch (this->size.size) {
+		switch (this->size) {
 			case 8:
 				return p_size::BYTE;
 			case 16:
@@ -183,7 +184,7 @@ namespace x86_64 {
 		}
 	}
 
-	bool storage::matches(const match_t &m) {
+	bool storage::matches(const match_t &m) const {
 		switch (this->type) {
 			case IMM:
 				if (m.valid_types.count(match_t::IMM) + m.valid_types.count(match_t::CONSTIMM) == 0) return false;
@@ -220,7 +221,7 @@ namespace x86_64 {
 	}
 
 	std::string codegenerator::generate() {
-		std::string output = generate_prologue();
+		std::string output = /* generate_prologue() */ {};
 		
 		for (auto&[k, v] : func_compileunits) {
 			output += k + ":\n";
@@ -229,9 +230,129 @@ namespace x86_64 {
 
 		// TODO: create the proper place for init.....
 		
-		output += output_string_table(string_table);
-		output += output_bss_section();
+		//output += output_string_table(string_table);
+		//output += output_bss_section();
 
 		return output;
+	}
+
+	template<typename T, typename=void>
+	struct emit_helper_ts_t {static const bool value = false;};
+	template<typename T>
+	struct emit_helper_ts_t<T, std::void_t<decltype(std::declval<T>().to_string())>> {static const bool value = true;};
+	template<typename T> std::string emit_helper(const T& t) {
+		if constexpr (std::is_constructible_v<std::string, T>)
+			return std::string{t};
+		else if constexpr (emit_helper_ts_t<T>::value)
+			return t.to_string();
+		else 
+			return std::to_string(t);
+	}
+	struct emitter {
+		emitter(std::string &result) : result(result) {}
+		template<typename ...Args>
+		void inline operator()(Args &&...args) {
+			result += (emit_helper(std::forward<Args>(args)) + ...) + '\n';
+		}
+
+	private:
+		std::string &result;
+	};
+
+	std::string codegenerator::generate_unit(compilation_unit &cu) {
+		current = &cu;
+		std::string result{};
+
+		auto emit = emitter(result);
+		
+		// Allocate storage
+		allocate_stores();
+
+		// Emit prologue
+		emit("push rbp");
+		emit("mov rbp, rsp");
+		if (local_stack_usage) emit("sub rsp, ", local_stack_usage);
+
+		// Check if the storage allocator put any of the parameters on the stack
+		
+		for (long i = 0; i < cu.num_params; ++i) {
+			if (stores[i].type == storage::STACKOFFSET) {
+				// Generate an appropriate mov instruction.
+				emit("mov ", stores[i], ", ", storage{(int)i, stores[i].size});
+			}
+		}
+
+		// Now, using a similar method to the debug printer, construct a list of statements and jump statements.
+
+		return result;
+	}
+	
+	// allocate_stores
+	void codegenerator::allocate_stores() {
+		enum req {
+			MEMORY,
+			ANY
+		};
+		// Step 1: count all of the registers and their requirements
+		std::map<long, std::set<req>> storage_requirements{};
+		std::map<long, long> maximum_seen_size{};
+		access_info info(*current, false, false);
+		long maximum_register = 0;
+
+		traverse_f(current->start, [&](statement *& stmt){
+			// First check for MEMORY reqs
+			if (si_addrof(*stmt)) {
+				if (ai_reg(stmt->rhs())) {
+					storage_requirements[stmt->rhs().num].insert(MEMORY);
+					maximum_register = std::max(maximum_register, stmt->rhs().num);
+				}
+			}
+
+			// Now, ensure the register count is up to date
+			stmt->for_all_write([&](const addr_ref& ar){
+				if (ai_reg(ar)) {
+					storage_requirements[ar.num].insert(ANY);
+					maximum_register = std::max(maximum_register, ar.num);
+					maximum_seen_size[ar.num] = std::max(maximum_seen_size[ar.num], (long)ar.rt.size);
+				}
+			});
+
+			// Update size for reads
+			stmt->for_all_read([&](const addr_ref& ar){
+				if (ai_reg(ar)) {
+					maximum_seen_size[ar.num] = std::max(maximum_seen_size[ar.num], (long)ar.rt.size);
+				}
+			});
+		});
+
+		// Now we have a list of requirements, go and allocate the array.
+		
+		this->stores.clear(); this->stores.resize(maximum_register);
+		local_stack_usage = 0;
+
+		// Go through all registers
+		
+		auto allocate = [&](long idx, auto &&...args) {
+			this->stores[idx] = storage{std::forward<decltype(args)>(args)...};
+		};
+
+		int regno = 0;
+		
+		for (long i = 0; i < maximum_register; ++i) {
+			if (storage_requirements.count(i) == 0) continue;
+
+			const auto& v = storage_requirements[i];
+			if (v.count(MEMORY) > 0 || regno > 13) {
+				// This needs to go onto the stack, so allocate another 
+				local_stack_usage += maximum_seen_size[i] / 8;
+				
+				allocate(i, storage::STACKOFFSET, local_stack_usage + 8, (uint8_t)maximum_seen_size[i]);
+
+				if (i < current->num_params) ++regno; // this could be improved: TODO optimize this stuff
+			}
+			else {
+				allocate(i, regno++, (uint8_t)maximum_seen_size[i]);
+			}
+		}
 	}
 }
