@@ -27,7 +27,8 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 			optimize_deduplicate() ||
 			optimize_copyelision() ||
 			optimize_simplify() || 
-			optimize_rename()
+			optimize_rename()  ||
+			optimize_canonize()
 	) {}
 	remove_register_holes();
 }
@@ -907,6 +908,29 @@ void tacoptimizecontext::remove_register_holes() {
 			}
 		}
 	} while (remaps);
+}
+
+int tacoptimizecontext::optimize_canonize() {
+	int modifications = 0;
+	traverse_f(optimizing->start, [&](statement *&s){
+		if (s->commutative()) {
+			// Find its first non-write param.
+			int i = 0; s->for_all_write([&](auto &){i = 1;});
+			// Check if they're sorted.
+			auto compare = [](const addr_ref& a, const addr_ref& b){
+				if (a.t != b.t) return a.t < b.t;
+				if (ai_reg(a) || ai_reg(b)) return a.num < b.num;
+				return a.ident < b.ident;
+			};
+
+			if (!std::is_sorted(++s->params.begin(), s->params.end(), compare)) {
+				DUMP_T std::cout << "recanonized" << std::endl;
+				std::sort(++s->params.begin(), s->params.end(), compare);
+				++modifications;
+			}
+		}
+	});
+	return modifications;
 }
 
 #undef DUMP_T

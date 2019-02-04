@@ -23,7 +23,7 @@
 #include <unordered_set>
 
 #define ENUM_ADDR_REFS(o) \
-	o(reg) o(num) o(ident)
+	o(reg) o(ident) o(num) 
 
 #define o(n) n, 
 enum struct ar_type {
@@ -136,7 +136,7 @@ struct statement {
 	template<typename T>
 	void for_all_read(T&& f);
 	
-	bool operator==(const statement& s) {
+	bool operator==(const statement& s) const {
 		return s.next == next && cond == s.cond && t == s.t && params == s.params;
 	}
 
@@ -153,6 +153,18 @@ struct statement {
 				std::size_t side_effects = 0;
 				for_all_write([&](addr_ref &r){if (ai_ident(r)) ++side_effects;});
 				return side_effects;
+		}
+	}
+
+	bool commutative() const {
+		switch (t) {
+			case st_type::add:
+			case st_type::mul:
+			case st_type::eq:
+			case st_type::ifeq:
+				return true;
+			default:
+				return false;
 		}
 	}
 };
