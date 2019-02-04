@@ -37,7 +37,9 @@ namespace x86_64 {
 			REG,
 			MEM,
 			IMM,
-			SAMEAS
+			CONSTIMM,
+			SAMEAS,
+			IDENT
 		};
 
 		std::set<type> valid_types;
@@ -45,22 +47,30 @@ namespace x86_64 {
 		int parm;
 	};
 
-	const char * registers[4][14] = {
-		{"al"  , "bl"  , "cl"  , "dl"  , "sil" , "dil" , "r8b" , "r9b" , "r10b" , "r11b" , "r12b" , "r13b" , "r14b" , "r15b"},
-		{"ax"  , "bx"  , "cx"  , "dx"  , "si"  , "di"  , "r8w" , "r9w" , "r10w" , "r11w" , "r12w" , "r13w" , "r14w" , "r15w"},
-		{"eax" , "ebx" , "ecx" , "edx" , "esi" , "edi" , "r8d" , "r9d" , "r10d" , "r11d" , "r12d" , "r13d" , "r14d" , "r15d"},
-		{"rax" , "rbx" , "rcx" , "rdx" , "rsi" , "rdi" , "r8"  , "r9"  , "r10"  , "r11"  , "r12"  , "r13"  , "r14"  , "r15"} 
-	};
+	extern const char * registers[4][14];
+	extern const char * sizes[4];
 
 	struct recipe {
-		int priority;
+		int cost;
 		st_type type;
 		std::string pattern;
 		
-
+		std::vector<match_t> matches;
+		std::vector<int> clobbers{};
 	};
 
+	extern const recipe recipes[];
+
 	struct codegenerator {
+		codegenerator(tacoptimizecontext &&ctx);
+
+		std::string generate();
+	private:
+		std::string generate_prologue();
+		// Generates _without_ the name.
+		std::string generate_unit(compilation_unit &cu);
+		// Generate the string table (although it uses numbers to avoid having to escape things)
+		std::string output_string_table(std::string table);
 	};
 }
 

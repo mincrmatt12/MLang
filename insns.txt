@@ -14,7 +14,7 @@ add:
  - dec %0 / (reg, mem), sameas(0), -1
  - add %0, %1 / reg, sameas(0), (reg, mem)
  - add %0, %1 / mem, sameas(0), reg
- - add %0, %1 / (reg, mem), imm
+ - add %0, %1 / (reg, mem), sameas(0), imm
  - lea %0, [%1 + %2], / reg, reg, (reg, imm)
  
 mul:
@@ -22,7 +22,7 @@ mul:
  - imul %0, %1, %2 / reg, (reg, mem), imm
 
 div:
- - idiv %0 | xor ah, ah / reg(a:wb), sameas(0), (reg,mem)(:b)
+ - idiv %0 | xor ah, ah / reg(a:b), sameas(0), (reg,mem)(:b)
  - cwd | idiv %2 / reg(a:w), sameas(0), (reg,mem)(:w) / d
  - cdq | idiv %2 / reg(a:l), sameas(0), (reg,mem)(:l) / d
  - cqo | idiv %2 / reg(a:q), sameas(0), (reg,mem)(:q) / d

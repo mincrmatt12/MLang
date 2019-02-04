@@ -19,4 +19,5 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 message(STATUS ${BISON_mlang_yacc_OUTPUTS})
 add_executable(mcc src/args.cpp src/main.cpp src/ast_optimize.cpp
-	           src/compiler.cpp src/tac_optimize.cpp src/preprocess.cpp ${BISON_mlang_yacc_OUTPUTS})
+	           src/compiler.cpp src/tac_optimize.cpp src/preprocess.cpp 
+			   src/codegen_64.cpp ${BISON_mlang_yacc_OUTPUTS})
