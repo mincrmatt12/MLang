@@ -116,6 +116,9 @@ struct statement {
 	addr_ref& lhs() {return params.front();}
 	addr_ref& rhs() {return params.back();}
 
+	const addr_ref& lhs() const {return params.front();}
+	const addr_ref& rhs() const {return params.back();}
+
 	template<typename ...T>
 	void reinit(T&&... r) {
 		auto n = next;

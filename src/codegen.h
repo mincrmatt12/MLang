@@ -72,18 +72,20 @@ namespace x86_64 {
 		long imm_or_offset{};
 		std::string global{};
 
-		ex_rtype size{};
+		uint8_t size{};
 
-		storage(int regno, ex_rtype t) : type(REG), regno(regno), size(t) {};
+		storage() : type(REG), regno(-1) {}
+		storage(int regno, uint8_t t) : type(REG), regno(regno), size(t) {};
 		storage(type_t t, long imm) : type(t), imm_or_offset(imm) {};
-		storage(type_t t, long imm, ex_rtype rt) : type(t), imm_or_offset(imm), size(rt) {};
-		storage(std::string g, ex_rtype t) : type(GLOBAL), global(g), size(t) {};
+		storage(type_t t, long imm, uint8_t rt) : type(t), imm_or_offset(imm), size(rt) {};
+		storage(std::string g, uint8_t t) : type(GLOBAL), global(g), size(t) {};
+		storage(const storage& s, uint8_t si) : type(s.type), regno(s.regno), imm_or_offset(s.imm_or_offset), global(s.global), size(si) {};
 
-		std::string to_string();
-		std::string to_string(p_size requested_size);
+		std::string to_string() const;
+		std::string to_string(p_size requested_size) const;
 
-		bool matches(const match_t& m);
-		p_size get_size();
+		bool matches(const match_t& m) const;
+		p_size get_size() const;
 	};
 
 	struct codegenerator {
