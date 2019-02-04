@@ -282,8 +282,9 @@ namespace x86_64 {
 			}
 		}
 
-		// Now, using a similar method to the debug printer, construct a list of statements and jump statements.
-
+		// Now, using a similar method to the debug printer, construct a list of labels.
+		
+		
 		return result;
 	}
 	
