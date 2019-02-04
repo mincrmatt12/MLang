@@ -203,4 +203,29 @@ namespace x86_64 {
 				break;
 		}
 	}
+
+	codegenerator::codegenerator(tacoptimizecontext &&ctx) {
+		func_compileunits = std::move(ctx.func_compileunits);
+		global_initscope = std::move(ctx.global_initscope);
+		string_table = std::move(ctx.string_table);
+		ext_list = std::move(ctx.ext_list);
+
+		current = nullptr;
+	}
+
+	std::string codegenerator::generate() {
+		std::string output = generate_prologue();
+		
+		for (auto&[k, v] : func_compileunits) {
+			output += k + ":\n";
+			output += generate_unit(v);
+		}
+
+		// TODO: create the proper place for init.....
+		
+		output += output_string_table(string_table);
+		output += output_bss_section();
+
+		return output;
+	}
 }

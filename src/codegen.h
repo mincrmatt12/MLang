@@ -96,6 +96,8 @@ namespace x86_64 {
 		std::string generate_unit(compilation_unit &cu);
 		// Generate the string table (although it uses numbers to avoid having to escape things)
 		std::string output_string_table(std::string table);
+		// Generate the bss section
+		std::string output_bss_section();
 
 		// Current compilation unit.
 		compilation_unit *current;
@@ -111,6 +113,12 @@ namespace x86_64 {
 		// Allocate storage for all TAC registers
 		// This is non-trivial, as we must check if there is an addrof operation anywhere.
 		void allocate_stores();
+
+		// Imported from tacoptimizer
+		std::map<std::string, compilation_unit> func_compileunits;
+		compilation_unit global_initscope;
+		std::string string_table;
+		std::vector<ext_function> ext_list; // finally gets used!
 	};
 }
 
