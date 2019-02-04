@@ -45,16 +45,22 @@ namespace x86_64 {
 		/* MUL */
 		{10, st_type::mul,  "imul %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm}},
+		{ 9, st_type::mul,  "shl %0, 1", {RegMem(AnyS), SameAs(0), Const(2)}},
+		{ 9, st_type::mul,  "shl %0, 2", {RegMem(AnyS), SameAs(0), Const(4)}},
+		{ 9, st_type::mul,  "shl %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
 		/* DIV */
 		{ 9, st_type::div,  "idiv %0 | xor ah, ah", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
 		{10, st_type::div,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), SameAs(0), RegMem({p_size::WORD})}, {2}},
 		{10, st_type::div,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), SameAs(0), RegMem({p_size::DWORD})}, {2}},
 		{10, st_type::div,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), SameAs(0), RegMem({p_size::QWORD})}, {2}},
+		{ 8, st_type::div,  "shr %0, 1", {RegMem(AnyS), SameAs(0), Const(2)}},
+		{ 8, st_type::div,  "shr %0, 2", {RegMem(AnyS), SameAs(0), Const(4)}},
+		{ 8, st_type::div,  "shr %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
         /* MOD */
-		{ 9, st_type::div,  "idiv %0 | shr ax, 8", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
-		{10, st_type::div,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), Reg(2, {p_size::WORD}), RegMem({p_size::WORD})}},
-		{10, st_type::div,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), Reg(2, {p_size::DWORD}), RegMem({p_size::DWORD})}},
-		{10, st_type::div,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), Reg(2, {p_size::QWORD}), RegMem({p_size::QWORD})}},
+		{ 9, st_type::mod,  "idiv %0 | shr ax, 8", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
+		{10, st_type::mod,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), Reg(2, {p_size::WORD}), RegMem({p_size::WORD})}},
+		{10, st_type::mod,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), Reg(2, {p_size::DWORD}), RegMem({p_size::DWORD})}},
+		{10, st_type::mod,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), Reg(2, {p_size::QWORD}), RegMem({p_size::QWORD})}},
 		/* NEG */
 		{10, st_type::neg,  "neg %0", {RegMem(AnyS), SameAs(0)}},
 		{11, st_type::neg,  "imul %0, %1, -1", {AnyReg(AnyS), RegMem(AnyS)}},
