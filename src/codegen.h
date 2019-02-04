@@ -39,7 +39,6 @@ namespace x86_64 {
 			IMM,
 			CONSTIMM,
 			SAMEAS,
-			IDENT
 		};
 
 		std::set<type> valid_types;
@@ -61,6 +60,32 @@ namespace x86_64 {
 
 	extern const recipe recipes[];
 
+	struct storage {
+		enum type_t {
+			REG,
+			IMM,
+			STACKOFFSET,
+			GLOBAL
+		} type;
+
+		int regno{};
+		long imm_or_offset{};
+		std::string global{};
+
+		ex_rtype size{};
+
+		storage(int regno, ex_rtype t) : type(REG), regno(regno), size(t) {};
+		storage(type_t t, long imm) : type(t), imm_or_offset(imm) {};
+		storage(type_t t, long imm, ex_rtype rt) : type(t), imm_or_offset(imm), size(rt) {};
+		storage(std::string g, ex_rtype t) : type(GLOBAL), global(g), size(t) {};
+
+		std::string to_string();
+		std::string to_string(p_size requested_size);
+
+		bool matches(const match_t& m);
+		p_size get_size();
+	};
+
 	struct codegenerator {
 		codegenerator(tacoptimizecontext &&ctx);
 
@@ -71,6 +96,21 @@ namespace x86_64 {
 		std::string generate_unit(compilation_unit &cu);
 		// Generate the string table (although it uses numbers to avoid having to escape things)
 		std::string output_string_table(std::string table);
+
+		// Current compilation unit.
+		compilation_unit *current;
+
+		// Current register allocation
+		std::vector<storage> stores;
+		// Local count
+		int local_stack_usage;
+
+		// Find the current storage for an addr_ref
+		storage get_storage_for(const addr_ref& ar);
+		
+		// Allocate storage for all TAC registers
+		// This is non-trivial, as we must check if there is an addrof operation anywhere.
+		void allocate_stores();
 	};
 }
 

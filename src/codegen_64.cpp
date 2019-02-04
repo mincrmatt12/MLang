@@ -84,17 +84,123 @@ namespace x86_64 {
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(DWordS), RegMem({p_size::WORD})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg({p_size::QWORD}), RegMem({p_size::DWORD})}},
-		{11, st_type::cast, "xor %r0, %r0 | mov %0, %b1", {AnyReg({p_size::BYTE}), RegMem(WordS)}},
-		{11, st_type::cast, "xor %r0, %r0 | mov %0, %w1", {AnyReg({p_size::WORD}), RegMem(DWordS)}},
-		{11, st_type::cast, "xor %r0, %r0 | mov %0, %d1", {AnyReg({p_size::DWORD}), RegMem({p_size::QWORD})}},
+		{11, st_type::cast, "xor %q0, %q0 | mov %0, %b1", {AnyReg({p_size::BYTE}), RegMem(WordS)}},
+		{11, st_type::cast, "xor %q0, %q0 | mov %0, %w1", {AnyReg({p_size::WORD}), RegMem(DWordS)}},
+		{11, st_type::cast, "xor %q0, %q0 | mov %0, %d1", {AnyReg({p_size::DWORD}), RegMem({p_size::QWORD})}},
 		{11, st_type::cast, "mov %0, 0 | mov %0, %b1", {Mem({p_size::BYTE}), AnyReg(WordS)}},
 		{11, st_type::cast, "mov %0, 0 | mov %0, %w1", {Mem({p_size::WORD}), AnyReg(DWordS)}},
 		{11, st_type::cast, "mov %0, 0 | mov %0, %d1", {Mem({p_size::DWORD}), AnyReg({p_size::QWORD})}},
 		/* FCALL & RET - special */
 		/* ADDROF */
-		{10, st_type::addrof, "lea %0, [rel %1]", {AnyReg(AnyS), Ident}},
 		{10, st_type::addrof, "lea %0, %1", {AnyReg(AnyS), Mem(AnyS)}},
 		/* STR */
 		{10, st_type::str,  "lea %0, [rel __STRTABLE]", {AnyReg(AnyS)}}
 	};
+
+#undef AnyS      
+#undef WordS    
+#undef DWordS  
+#undef SameAs
+#undef Reg
+#undef AnyReg
+#undef RegMem 
+#undef Any	 
+#undef RegImm  
+#undef Imm    
+#undef Mem
+#undef Const
+#undef Ident  
+
+	std::string storage::to_string(p_size rs) {
+		switch (this->type) {
+			case GLOBAL:
+				switch (rs) {
+					case p_size::BYTE:
+						return "byte ptr [rel " + this->global + "]";
+					case p_size::WORD:
+						return "word ptr [rel " + this->global + "]";
+					case p_size::DWORD:
+						return "dword ptr [rel " + this->global + "]";
+					case p_size::QWORD:
+						return "qword ptr [rel " + this->global + "]";
+					default:
+						throw std::logic_error("Invalid size in to_string");
+				}	
+			case STACKOFFSET:
+				switch (rs) {
+					case p_size::BYTE:
+						return "byte ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+					case p_size::WORD:
+						return "word ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+					case p_size::DWORD:
+						return "dword ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+					case p_size::QWORD:
+						return "qword ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+					default:
+						throw std::logic_error("Invalid size in to_string");
+				}	
+			case IMM:
+				return std::to_string(imm_or_offset);
+			case REG:
+				switch (rs) {
+					case p_size::BYTE:
+						return registers[0][regno];
+					case p_size::WORD:
+						return registers[1][regno];
+					case p_size::DWORD:
+						return registers[2][regno];
+					case p_size::QWORD:
+						return registers[3][regno];
+					default:
+						throw std::logic_error("Invalid size in to_string");
+				}
+		}
+	}
+
+	std::string storage::to_string() {
+		return to_string(get_size());
+	}
+
+	p_size storage::get_size() {
+		if (this->type == IMM) return p_size::QWORD;
+		switch (this->size.size) {
+			case 8:
+				return p_size::BYTE;
+			case 16:
+				return p_size::WORD;
+			case 32:
+				return p_size::DWORD;
+			case 64:
+				return p_size::QWORD;
+			default:
+				throw std::logic_error("Invalid size in to_string");
+		}
+	}
+
+	bool storage::matches(const match_t &m) {
+		switch (this->type) {
+			case IMM:
+				if (m.valid_types.count(match_t::IMM) + m.valid_types.count(match_t::CONSTIMM) == 0) return false;
+
+				if (m.valid_types.count(match_t::CONSTIMM) == 1 && m.parm != imm_or_offset) return false;
+				return true;
+			case REG:
+				if (m.valid_types.count(match_t::REG) == 0) return false;
+
+				if (m.parm != ~0 && m.parm != regno) return false;
+				if (m.valid_sizes.count(get_size()) == 0) return false;
+				return true;
+			case STACKOFFSET:
+				if (m.valid_types.count(match_t::MEM) == 0) return false;
+
+				if (m.valid_sizes.count(get_size()) == 0) return false;
+				return true;
+			case GLOBAL:
+				if (m.valid_types.count(match_t::MEM) == 0) return false;
+
+				if (m.valid_sizes.count(get_size()) == 0) return false;
+				return true;
+				break;
+		}
+	}
 }
