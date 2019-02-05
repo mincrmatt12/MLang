@@ -2,6 +2,7 @@
 #include <cmath>
 #include "flow.h"
 #include "args.h"
+#include "stringify.h"
 
 #define DUMP_T if(dumplevel >= 2)
 
@@ -29,7 +30,7 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 			optimize_simplify() || 
 			optimize_rename()  ||
 			optimize_canonize()
-	) {}
+	) { }
 	remove_register_holes();
 }
 
@@ -619,7 +620,6 @@ int  tacoptimizecontext::optimize_simplify() {
 			}
 			case st_type::ifnz:
 			{
-				if (!do_swap_cond_next()) break;
 				// Check if the source of this ifnz is an eq with a literal zero.
 				auto &d = info.data[s].parameters[0];
 				if (d.size() == 1) {
@@ -627,32 +627,13 @@ int  tacoptimizecontext::optimize_simplify() {
 					if (auto p = std::get_if<statement *>(&source); p != nullptr) {
 						auto stmt_src = *p;
 						if (si_eq(*stmt_src)) {
-							// Make sure only one of the params is zero
-							
-							int other;
-							if (std::count_if(++stmt_src->params.begin(), stmt_src->params.end(), [&,i=1](auto &rf) mutable {
-										int index = i++;
-										if (!ai_num(rf)) { other = index; return false; }
-										return rf.num == 0;
-							})) {
-								// Is other still accessible?
-								addr_ref r = stmt_src->params[other];
-								if (ai_reg(r) && info.data[stmt_src].parameters[other] == info.data[s].everything[r.num]) {
-									// Good, good.
-									++modifications;
-									std::swap(s->next, s->cond);
-									s->params[0] = std::move(r);
-									DUMP_T std::cout << "swapped cond&next for !=" << std::endl;
-								}
-							} 
-
-							// Otherwise, try to make an ifeq
+							// Try to make an ifeq
 							
 							// Check if all operands to the EQ are still accessible at the time of the ifnz
 							if (info.data[stmt_src].parameters[0].size() == 1 && std::all_of(++stmt_src->params.begin(), stmt_src->params.end(), [&,i=1](auto &rf) mutable {
 								int other = i++;
 								return !ai_reg(rf) || info.data[stmt_src].parameters[other] == info.data[s].everything[rf.num];
-							})) {
+							}) && do_canonize_ifnz()) {
 								// Alright, we can create an ifeq
 								s->reinit(st_type::ifeq, stmt_src->params[1], stmt_src->params[2]);
 								stmt_src->make_nop();
@@ -660,7 +641,7 @@ int  tacoptimizecontext::optimize_simplify() {
 								DUMP_T std::cout << "replaced if+eq with ifeq" << std::endl;
 							}
 						}
-						else if (si_gt(*stmt_src)) {
+						else if (si_gt(*stmt_src) && do_canonize_ifnz()) {
 							// Try to create a ifgt
 							// Check if all operands to the gt are still accessible at the time of the ifnz
 							if (info.data[stmt_src].parameters[0].size() == 1 && std::all_of(++stmt_src->params.begin(), stmt_src->params.end(), [&,i=1](auto &rf) mutable {

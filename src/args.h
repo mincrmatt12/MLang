@@ -35,11 +35,11 @@ o(1, 1, 1, remove_redundant_ifnz, 14) \
 o(0, 0, 1, remove_tail_call, 15) \
 o(0, 1, 1, tac_arith_constfold, 16) \
 o(0, 1, 1, tac_logic_constfold, 17) \
-o(0, 1, 1, swap_cond_next, 18) \
+o(0, 1, 1, canonize_ifnz, 18) \
 o(1, 1, 1, remove_useless_mov, 19) \
 o(1, 1, 1, remove_fcall_result_cast, 20) \
 o(0, 1, 1, rename_registers, 21) \
-o(0, 1, 1, remap_registers, 22)
+o(0, 1, 1, remap_registers, 22) 
 
 static void setup_optimize(int level) {
 	#define o(o1, o2, o3, name, _) optimize.push_back(level == 0 ? false : (level == 1 ? o1 : (level == 2 ? o2 : o3)));
