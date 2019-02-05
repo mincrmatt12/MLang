@@ -121,6 +121,16 @@ namespace x86_64 {
 		compilation_unit global_initscope;
 		std::string string_table;
 		std::vector<ext_function> ext_list; // finally gets used!
+
+		// Assemblers
+		std::string assemble(statement* stmt, int labelno=0);
+		// Seperated for functional clarity -- handles ret and fcall, assemble delegates to this
+		std::string assemble_special(statement * stmt, int labelno);
+
+		// Helper functions
+		bool is_register_used(int regno);
+		int  get_clobber_register(std::set<int> important_registers);
+		bool is_clobber_available();
 	};
 }
 

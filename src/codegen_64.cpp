@@ -311,35 +311,21 @@ namespace x86_64 {
 
 		// Alright, we're now able to begin instruction conversion
 		//
-		// This happens in multiple phases:
-		//  - First, attempt to find a perfect match. Pick the one with the least cost, and return
-		//   
-		//  - Otherwise, attempt to find the closest.
-		//     - If any of the write parameters match, make the set of possibilities the set of those that match
-		//       - If there are no write params, match on first read param
-		//     - Otherwise, try all, but first
-		//       - Match the write param:
-		//         - If the write param is a _register_ and the target is a _register, use a mov (adding the write param to clobber set) and add one to the cost
-		//         - If the write param is a _register_ and the target is _memory_, use a mov (add one to cost)
-		//         - If the write param is _memory_, and the target is a _register_, use a mov (add _two_ to cost)
-		//         - If the write param is _memory and the target is _memory, remove this possiblity from the possible set.
-		//     - Now attempt to match all of the read parameters
-		//       - In the case of a sameas:
-		//         - Assemble a mov $2, $0 _UNLESS_ both are memory, in which case ALSO emit a mov $T, $0 where T is a scratch register (or in worst case, a clobberable, add 1 2 or 3 respectively)
-		//       - If the target is supposed to be either a register or memory, assume register if there are scratch ones available, otherwise use memory (in case add 1)
-		//       - If the target (after rule #2) is a _register_ or _memory_, and the current source is an _immediate_
-		//         - If the immediate's size is 64 and _memory_ is to be used, remove this possibility
-		//         - Otherwise, emit a mov %0, imm (add one to cost)
-		//       - If the target is supposed to be _register_ and current source is the wrong register, use a mov (adding the target to the clobber set) and add one to cost
-		//       - If the target is supposed to be _register_ and current source is _memory_, use a mov as well (adding one to cost)
-		//       - If the target is supposed to be _memory_ and current source is _memory_, remove possibility
-		//  
-		//  - Next, handle clobbering.
-		//    - For any register that is clobbered, do one of the following ONLY IF the register was allocated:
-		//      - Are there available registers? If so, use mov to store, then use mov to restors
-		//      - Otherwise, use push/pop
-		//
-		//  - Finally, add the resulting string.
+		
+		for (std::size_t i = 0; i < stmts.size(); ++i) {
+			const auto& stmt = stmts[i];
+			// check if we need to emit a label?
+			if (labels.count(stmt)) emit(".L", labels[stmt], ":");
+			// assemble an instruction
+			if (stmt->cond == nullptr)
+				result += assemble(stmt); // assemble also handles fcall / ret with some special logic
+			else
+				result += assemble(stmt, labels[stmt->cond]); // assemble also handles fcall / ret with some special logic
+			// if required, add a jmp
+			if (stmt->next != nullptr && stmts[i+1] != stmt->next) {
+				emit("jmp .L", labels[stmt->next]);
+			}
+		}
 
 		return result;
 	}
@@ -412,4 +398,162 @@ namespace x86_64 {
 			}
 		}
 	}
+
+	
+
+	std::string codegenerator::assemble(statement* stmt, int labelno) {
+		if (si_fcall(*stmt) || si_ret(*stmt)) return assemble_special(stmt, labelno);
+
+		// This happens in multiple phases:
+		//  - First, attempt to find a perfect match. Pick the one with the least cost, and return
+		//   
+		//  - Otherwise, attempt to find the closest.
+		//     - If any of the write parameters match, make the set of possibilities the set of those that match
+		//       - If there are no write params, match on first read param
+		//     - Otherwise, try all, but first
+		//       - Match the write param:
+		//         - If the write param is a _register_ and the target is a _register, use a mov (adding the write param to clobber set) and add one to the cost
+		//         - If the write param is a _register_ and the target is _memory_, use a mov (add one to cost)
+		//         - If the write param is _memory_, and the target is a _register_, use a mov (add _two_ to cost)
+		//     - Now attempt to match all of the read parameters
+		//       - In the case of a sameas:
+		//         - Assemble a mov $2, $0 _UNLESS_ both are memory, in which case ALSO emit a mov $T, $0 where T is a scratch register (or in worst case, a clobberable, add 1 2 or 3 respectively)
+		//       - If the target is supposed to be either a register or memory, assume register if there are scratch ones available, otherwise use memory (in case add 1)
+		//       - If the target (after rule #2) is a _register_ or _memory_, and the current source is an _immediate_
+		//         - If the immediate's size is 64 and _memory_ is to be used, remove this possibility
+		//         - Otherwise, emit a mov %0, imm (add one to cost)
+		//       - If the target is supposed to be _register_ and current source is the wrong register, use a mov (adding the target to the clobber set) and add one to cost
+		//       - If the target is supposed to be _register_ and current source is _memory_, use a mov as well (adding one to cost)
+		//       - If the target is supposed to be _memory_ and current source is _memory_, remove possibility
+		//  
+		//  - Next, handle clobbering.
+		//    - For any register that is clobbered, do one of the following ONLY IF the register was allocated:
+		//      - Are there available registers? If so, use mov to store, then use mov to restors
+		//      - Otherwise, use push/pop
+		//
+		//  - Finally, add the resulting string.
+		
+		std::string result;
+		auto emit = emitter(result);
+		
+		std::map<const recipe *, int> added_costs;
+		auto consider_compare = [&](const recipe* a, const recipe* b){
+			return std::make_tuple(a->cost + added_costs[a], a) < std::make_tuple(b->cost + added_costs[b], b);
+		};
+		std::vector<const recipe *> considered_set;
+
+		// Grab the list of storages
+		std::vector<storage> stores{};
+		for (const auto &param : stmt->params) stores.push_back(get_storage_for(param));
+
+		// Try and find matching combinations
+		for (const auto& possible : recipes) {
+			if (possible.type != stmt->t) continue;
+			if (std::equal(stores.begin(), stores.end(), possible.matches.cbegin(), [](const auto &a, const auto& b){
+				return a.matches(b);
+			})) {
+				considered_set.push_back(&possible);
+			}
+		}
+
+		std::sort(considered_set.begin(), considered_set.end(), consider_compare);
+		const recipe *chosen_recipe;
+
+		if (!considered_set.empty()) {
+			// Alright! Easy time!
+			// No need to do _any_ fixing, so we can skip right to clobber generation
+			chosen_recipe = considered_set.front();
+		}
+		else {
+			// Poo.
+			// We need to begin the MAGICAL FIXING ALGORITHM TWO THOUSAND EDITION
+			std::map<const recipe *, std::string> added_commands;
+			std::map<const recipe *, std::string> post_commands;
+			std::map<const recipe *, std::set<int>> added_registers;
+
+			int num_write_params = 0; stmt->for_all_write([&](auto &){num_write_params = 1;});
+
+			if (num_write_params) {
+				for (const auto& possible : recipes) {
+					if (possible.type != stmt->t) continue;
+					if (stores[0].matches(possible.matches[0])) considered_set.push_back(&possible);
+				}
+			}
+
+			std::sort(considered_set.begin(), considered_set.end(), consider_compare);
+
+			// Are there any matches?
+			if (!considered_set.empty()) {
+				// I guess not... if there _was_ a write parameter, we need to match it up. Do that for all of them. Otherwise, we just continue on with all possiblities.
+				for (const auto& possible : recipes) {
+					if (possible.type != stmt->t) continue;
+					considered_set.push_back(&possible);
+				}
+
+				// Get the list of important registers now.
+				std::set<int> important_registers;
+				stmt->for_all_read([&](const auto& rf){
+					storage st = get_storage_for(rf);
+					if (st.type == storage::REG) {
+						important_registers.insert(st.regno);
+					}
+				});
+
+				if (num_write_params) {
+					// Now attempt to fill up the post_commands
+					for (const auto& possible : considered_set) {
+						const auto& wparam = possible->matches[0];
+						if (wparam.valid_sizes.count(stores[0].get_size()) == 0) {
+							// Invalid, mark as such by setting cost to -1
+							added_costs[possible] = -1;
+						}
+						post_commands[possible] = {}; // make sure it exists, since we use &
+						auto emit = emitter(post_commands[possible]);
+						if (wparam.valid_types.count(match_t::REG)) {
+							if (stores[0].type == storage::REG) {
+								// IN THIS CASE: we need to use a mov, because it is a register (if it was REGMEM it would have been matched earlier, therefore the only case is reg(:something)
+								// Emit a mov
+								emit("mov ", stores[0], ", ", storage{wparam.parm, stores[0].size});
+								// Add 1 to cost
+								added_costs[possible]++;
+								// Add to clobber
+								added_registers[possible].insert(wparam.parm);
+							}	
+							else if (stores[0].type == storage::STACKOFFSET || stores[0].type == storage::GLOBAL) {
+								// IN THIS CASE: we need to use a mov, because it is memory, and if it was REGMEM it would have been matches.
+								// The register, however, isn't always defined. If it isn't, find one.
+								int reg = wparam.parm == ~0 ? wparam.parm : get_clobber_register(important_registers);
+								// Add to clobber
+								added_registers[possible].insert(reg);
+								// Emit a mov
+								emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
+								// Add _2_ to cost
+								added_costs[possible] += 2;
+							}	
+							else {
+								// Otherwise, it's an immediate, which is impossible, so throw an error.
+								throw std::logic_error("Tried to write to an immed");
+							}
+						}
+						else if (wparam.valid_types.count(match_t::MEM)) {
+							// For now, simply disregard this, as there should _always_ be a vailid option with REG
+							added_costs[possible] = -1;
+						}
+					}
+
+					// Discard invalid options
+					considered_set.erase(std::remove_if(considered_set.begin(), considered_set.end(), [&](const auto &a){return added_costs[a] == -1;}), considered_set.end());
+					// Sort valid options
+					std::sort(considered_set.begin(), considered_set.end(), consider_compare);
+				}
+			}
+
+			if (considered_set.empty()) {
+				// Still no options, give up and throw an error.
+				throw std::logic_error("No remaining options");
+			}
+
+			// Alright! We've got some options now with which we've balanced the write parameter properly.
+		}
+	};
 }
