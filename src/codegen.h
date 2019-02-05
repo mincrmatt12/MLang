@@ -85,7 +85,10 @@ namespace x86_64 {
 		std::string to_string(p_size requested_size) const;
 
 		bool matches(const match_t& m) const;
+		bool matches(const match_t& m, const std::vector<storage> &others) const;
 		p_size get_size() const;
+
+		bool operator==(const storage& other) const;
 	};
 
 	struct codegenerator {
