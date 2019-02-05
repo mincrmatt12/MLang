@@ -62,9 +62,9 @@ namespace x86_64 {
 		{ 8, st_type::div,  "shr %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
         /* MOD */
 		{ 9, st_type::mod,  "idiv %0 | shr ax, 8", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
-		{10, st_type::mod,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), Reg(2, {p_size::WORD}), RegMem({p_size::WORD})}},
-		{10, st_type::mod,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), Reg(2, {p_size::DWORD}), RegMem({p_size::DWORD})}},
-		{10, st_type::mod,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), Reg(2, {p_size::QWORD}), RegMem({p_size::QWORD})}},
+		{10, st_type::mod,  "cwd | idiv %2", {Reg(2, {p_size::WORD}), Reg(6, {p_size::WORD}), RegMem({p_size::WORD})}},
+		{10, st_type::mod,  "cdq | idiv %2", {Reg(2, {p_size::DWORD}), Reg(6, {p_size::DWORD}), RegMem({p_size::DWORD})}},
+		{10, st_type::mod,  "cqo | idiv %2", {Reg(2, {p_size::QWORD}), Reg(6, {p_size::QWORD}), RegMem({p_size::QWORD})}},
 		/* NEG */
 		{10, st_type::neg,  "neg %0", {RegMem(AnyS), SameAs(0)}},
 		{11, st_type::neg,  "imul %0, %1, -1", {AnyReg(AnyS), RegMem(AnyS)}},
@@ -308,6 +308,38 @@ namespace x86_64 {
 				if (st->next != nullptr && stmts[i+1] != st->next) add_label(st->next);
 			}
 		}	
+
+		// Alright, we're now able to begin instruction conversion
+		//
+		// This happens in multiple phases:
+		//  - First, attempt to find a perfect match. Pick the one with the least cost, and return
+		//   
+		//  - Otherwise, attempt to find the closest.
+		//     - If any of the write parameters match, make the set of possibilities the set of those that match
+		//       - If there are no write params, match on first read param
+		//     - Otherwise, try all, but first
+		//       - Match the write param:
+		//         - If the write param is a _register_ and the target is a _register, use a mov (adding the write param to clobber set) and add one to the cost
+		//         - If the write param is a _register_ and the target is _memory_, use a mov (add one to cost)
+		//         - If the write param is _memory_, and the target is a _register_, use a mov (add _two_ to cost)
+		//         - If the write param is _memory and the target is _memory, remove this possiblity from the possible set.
+		//     - Now attempt to match all of the read parameters
+		//       - In the case of a sameas:
+		//         - Assemble a mov $2, $0 _UNLESS_ both are memory, in which case ALSO emit a mov $T, $0 where T is a scratch register (or in worst case, a clobberable, add 1 2 or 3 respectively)
+		//       - If the target is supposed to be either a register or memory, assume register if there are scratch ones available, otherwise use memory (in case add 1)
+		//       - If the target (after rule #2) is a _register_ or _memory_, and the current source is an _immediate_
+		//         - If the immediate's size is 64 and _memory_ is to be used, remove this possibility
+		//         - Otherwise, emit a mov %0, imm (add one to cost)
+		//       - If the target is supposed to be _register_ and current source is the wrong register, use a mov (adding the target to the clobber set) and add one to cost
+		//       - If the target is supposed to be _register_ and current source is _memory_, use a mov as well (adding one to cost)
+		//       - If the target is supposed to be _memory_ and current source is _memory_, remove possibility
+		//  
+		//  - Next, handle clobbering.
+		//    - For any register that is clobbered, do one of the following ONLY IF the register was allocated:
+		//      - Are there available registers? If so, use mov to store, then use mov to restors
+		//      - Otherwise, use push/pop
+		//
+		//  - Finally, add the resulting string.
 
 		return result;
 	}
