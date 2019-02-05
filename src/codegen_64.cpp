@@ -72,10 +72,11 @@ namespace x86_64 {
 		/* IFNZ */
 		{10, st_type::ifnz, "cmp %0, 0 | jne %l", {RegMem(AnyS)}},
 		/* IFEQ */
-		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(MDWordS)}},
-		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(MDWordS), RegMem(AnyS)}},
+		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(AnyS), RegMem(AnyS)}},
 		/* IFGT */
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), RegImm(MDWordS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), AnyReg(AnyS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), Imm(MDWordS)}},
 		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg({p_size::BYTE})}},
@@ -88,8 +89,8 @@ namespace x86_64 {
 		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), AnyReg({p_size::DWORD})}},
 		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), AnyReg({p_size::QWORD})}},
 		/* EQ */
-		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(MDWordS)}},
-		{10, st_type::eq,   "cmp %2, %1 | sete %0 ", {RegMem(AnyS), RegImm(MDWordS), RegMem(AnyS)}},
+		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::eq,   "cmp %2, %1 | sete %0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
 		/* GT */
 		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
@@ -622,7 +623,7 @@ namespace x86_64 {
 						if (possible->matches[i].parm != 0) throw std::runtime_error("not implemented: !=0 sameas");
 						// Otherwise, this means that we have to convert a ThrAC to a TwAC.
 						// Do this by emitting a mov.
-						if (stores[0].type == storage::REG) {
+						if (chosen_stores[possible][0].type == storage::REG) {
 							emit("mov ", chosen_stores[possible][0], ", ", stores[1]);
 							// Mark chosen storage
 							chosen_stores[possible][i] = chosen_stores[possible][0];
