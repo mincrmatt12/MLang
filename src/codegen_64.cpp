@@ -458,11 +458,15 @@ namespace x86_64 {
 
 		std::sort(considered_set.begin(), considered_set.end(), consider_compare);
 		const recipe *chosen_recipe;
+		std::string pre_command = "";
+		std::string post_command = "";
+		std::set<int> clobbers;
 
 		if (!considered_set.empty()) {
 			// Alright! Easy time!
 			// No need to do _any_ fixing, so we can skip right to clobber generation
 			chosen_recipe = considered_set.front();
+			for (const auto &k : chosen_recipe->clobbers) clobbers.insert(k);
 		}
 		else {
 			// Poo.
@@ -470,6 +474,7 @@ namespace x86_64 {
 			std::map<const recipe *, std::string> added_commands;
 			std::map<const recipe *, std::string> post_commands;
 			std::map<const recipe *, std::set<int>> added_registers;
+			std::map<const recipe *, std::vector<storage>> chosen_stores;
 
 			int num_write_params = 0; stmt->for_all_write([&](auto &){num_write_params = 1;});
 
@@ -477,10 +482,20 @@ namespace x86_64 {
 				for (const auto& possible : recipes) {
 					if (possible.type != stmt->t) continue;
 					if (stores[0].matches(possible.matches[0])) considered_set.push_back(&possible);
+					chosen_stores[&possible] = stores;
 				}
 			}
 
 			std::sort(considered_set.begin(), considered_set.end(), consider_compare);
+
+			// Get the list of important registers now.
+			std::set<int> important_registers;
+			stmt->for_all_read([&](const auto& rf){
+				storage st = get_storage_for(rf);
+				if (st.type == storage::REG) {
+					important_registers.insert(st.regno);
+				}
+			});
 
 			// Are there any matches?
 			if (!considered_set.empty()) {
@@ -489,15 +504,6 @@ namespace x86_64 {
 					if (possible.type != stmt->t) continue;
 					considered_set.push_back(&possible);
 				}
-
-				// Get the list of important registers now.
-				std::set<int> important_registers;
-				stmt->for_all_read([&](const auto& rf){
-					storage st = get_storage_for(rf);
-					if (st.type == storage::REG) {
-						important_registers.insert(st.regno);
-					}
-				});
 
 				if (num_write_params) {
 					// Now attempt to fill up the post_commands
@@ -518,17 +524,21 @@ namespace x86_64 {
 								added_costs[possible]++;
 								// Add to clobber
 								added_registers[possible].insert(wparam.parm);
+								// Mark changed storage
+								chosen_stores[possible][0] = storage{wparam.parm, stores[0].size};
 							}	
 							else if (stores[0].type == storage::STACKOFFSET || stores[0].type == storage::GLOBAL) {
 								// IN THIS CASE: we need to use a mov, because it is memory, and if it was REGMEM it would have been matches.
 								// The register, however, isn't always defined. If it isn't, find one.
-								int reg = wparam.parm == ~0 ? wparam.parm : get_clobber_register(important_registers);
+								int reg = wparam.parm != ~0 ? wparam.parm : get_clobber_register(important_registers);
 								// Add to clobber
 								added_registers[possible].insert(reg);
 								// Emit a mov
 								emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
 								// Add _2_ to cost
 								added_costs[possible] += 2;
+								// Mark cosen storage location
+								chosen_stores[possible][0] = storage{reg, stores[0].size};
 							}	
 							else {
 								// Otherwise, it's an immediate, which is impossible, so throw an error.
@@ -554,6 +564,230 @@ namespace x86_64 {
 			}
 
 			// Alright! We've got some options now with which we've balanced the write parameter properly.
+
+			for (const auto& possible : considered_set) {
+				// Balance all of the read paramters.
+				std::set<size_t> needs_remapping;
+				auto emit = emitter(added_commands[possible]);
+				for (size_t i = num_write_params; i < stores.size(); ++i) {
+					if (needs_remapping.count(i)) {
+						// This is a) a register, that needs to be changed. Add these instructions _without_ the emitter, since it needs to go before everything else.
+						
+						if (stores[i].matches(possible->matches[i])) {
+							// Alright, all we have to do is allocate another register
+							std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
+							int newregno = get_clobber_register(used_registers);
+
+							storage new_register{newregno, stores[i].size};
+							added_commands[possible] = "mov ", new_register.to_string() + ", " + stores[i].to_string() + "\n" + added_commands[possible] ;
+							added_registers[possible].insert(newregno);
+
+							chosen_stores[possible][i] = std::move(new_register);
+						}
+						else {
+							// We have issues: the thing is probably a memory, which could work. It also might be an imm, which won't.
+							// For now, do a not-implemented
+							
+							added_costs[possible] = -1;
+							break;
+						}
+					}
+					if (stores[i].matches(possible->matches[i])) continue; // Alright, nothing to do.
+					// otherwise, check the type of matches[i]
+					if (possible->matches[i].valid_types.count(match_t::SAMEAS)) {
+						// There's a sameas -- this almost _always_ is a sameas(0), so quickly make sure of that
+						if (possible->matches[i].parm != 0) throw std::runtime_error("not implemented: !=0 sameas");
+						// Otherwise, this means that we have to convert a ThrAC to a TwAC.
+						// Do this by emitting a mov.
+						if (stores[0].type == storage::REG) {
+							emit("mov ", chosen_stores[possible][0], ", ", stores[1]);
+							// Mark chosen storage
+							chosen_stores[possible][i] = chosen_stores[possible][0];
+						}
+						else if ((chosen_stores[possible][0].type == storage::STACKOFFSET || chosen_stores[possible][0].type == storage::GLOBAL) && (stores[i].type == storage::REG || stores[i].type == storage::IMM)) {
+							// Also use a mov, but increase the cost
+							emit("mov ", chosen_stores[possible][0], ", ", stores[1]);
+							added_costs[possible]++;
+							// Mark chosen storage
+							chosen_stores[possible][i] = chosen_stores[possible][0];
+						}
+						else {
+							// Mark as invalid
+							added_costs[possible] = -1;
+							break;
+						}
+					}
+					// Check if it should be either register or memory and jump to appropriate block
+					else if (possible->matches[i].valid_types.count(match_t::MEM) && possible->matches[i].valid_types.count(match_t::REG)) {
+						if (is_clobber_available()) goto use_register;
+						else 	                    goto use_mem;
+					}
+					else if (possible->matches[i].valid_types.count(match_t::REG)) {
+use_register:
+						std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
+						int regno = possible->matches[i].parm != ~0 ? possible->matches[i].parm : get_clobber_register(used_registers);
+
+						if (used_registers.count(regno)) {
+							// Shuffling of the other read parameters is critical. Becuase of laziness, add a simple marker.
+							for (size_t j = i + 1; j < stores.size(); ++j) {
+								if (stores[j].type == storage::REG && stores[j].regno == regno) {
+									needs_remapping.insert(j);
+								}
+							}
+						}
+
+						// Alright, now we have to go remap it. mov into the target.
+						
+						emit("mov ", storage{regno, stores[i].size}, ", ", stores[i]);
+
+						chosen_stores[possible][i] = storage{regno, stores[i].size};
+						added_costs[possible]++;
+					}
+					else {
+use_mem:
+						// For now, kill the possiblity
+						added_costs[possible] = -1;
+						break;
+					}
+				}
+			}
+
+			// Discard invalid options
+			considered_set.erase(std::remove_if(considered_set.begin(), considered_set.end(), [&](const auto &a){
+					// If the thing is _still_ not possibl,e also kill it with fire.
+					if (!std::equal(chosen_stores[a].begin(), chosen_stores[a].end(), a->matches.cbegin(), [](const auto &a, const auto& b){
+						return a.matches(b);
+					})) return true;
+
+					return added_costs[a] == -1;
+			}), considered_set.end());
+			// Sort valid options
+			std::sort(considered_set.begin(), considered_set.end(), consider_compare);
+
+			if (considered_set.empty())
+				throw std::logic_error("No more options");
+			// pick chosen
+
+			chosen_recipe = considered_set.front();
+
+			// setup pre commands
+			pre_command = added_commands[chosen_recipe];
+			post_command = post_commands[chosen_recipe];
+			
+			// Add clobbers
+			for (const auto &k : chosen_recipe->clobbers) clobbers.insert(k);
+			for (const auto &k : added_registers[chosen_recipe]) clobbers.insert(k);
+
+			// Change stores
+			stores = chosen_stores[chosen_recipe];
 		}
+
+		// Finally, the two paths merge.
+		
+		for (const auto &k : clobbers) {
+			// Fix the clobbering
+			pre_command = "push " + storage{k, 64}.to_string() + '\n' + pre_command;
+			post_command += "pop " + storage{k, 64}.to_string() + '\n';
+		}
+
+		// Now, begin emitting stuff
+		
+		emit(pre_command);
+
+		// Interpret the recipe.
+		char c;
+		for (size_t i = 0; i < chosen_recipe->pattern.size(); c = chosen_recipe->pattern[i]) {
+			switch (c) {
+				case '|':
+					result += '\n';
+					++i;
+					break;
+				case '%':
+					{
+						++i;
+						c = chosen_recipe->pattern[i];
+						uint8_t size_override = 0;
+						switch (c) {
+							case 'l':
+								result += ".L" + std::to_string(labelno);
+								++i;
+								continue;
+							case 'b':
+								size_override = 8;
+								++i;
+								break;
+							case 'w':
+								size_override = 16;
+								++i;
+								break;
+							case 'd':
+								size_override = 32;
+								++i;
+								break;
+							case 'q':
+								size_override = 64;
+								++i;
+								break;
+							default:
+								break;
+						}
+						int offset = chosen_recipe->pattern[i] - '0';
+
+						// Substitude the recipe.
+						result += (size_override ? storage{stores[i], size_override} : stores[i]).to_string();
+						++i;
+					}
+					break;
+				default:
+					result += c;
+					++i;
+					break;
+			}
+		}
+
+		result += '\n';
+
+		emit(post_command);
+
+		return result;
 	};
+
+	storage codegenerator::get_storage_for(const addr_ref &ar) {
+		// Is this AR a register?
+		if (ai_reg(ar)) {
+			return {stores[ar.num], static_cast<uint8_t>(ar.rt.size)};
+		}
+		else if (ai_num(ar)) {
+			return {storage::IMM, ar.num};
+		}
+		else {
+			return {ar.ident.name, static_cast<uint8_t>(ar.ident.t.size)};
+		}
+	}
+
+	bool codegenerator::is_clobber_available() {
+		int rcount;
+		for (const auto &k : stores) {
+			if (k.type == storage::REG) ++rcount;
+		}
+		return rcount < 14;
+	}
+
+	int codegenerator::get_clobber_register(std::set<int> regs) {
+		std::set<int> used;
+		for (const auto &k : stores) {
+			if (k.type == storage::REG) used.insert(k.regno);
+		}
+		for (int regno = 13; regno >= 0; --regno) {
+			if (used.count(regno) || regs.count(regno)) continue;
+			return regno;
+		}
+		for (int regno = 13; regno >= 0; --regno) {
+			if (regs.count(regno)) continue;
+			return regno;
+		}
+		throw std::runtime_error("OUT OF REGISTERS OH NO POOOOOO");
+	}
+
+	std::string codegenerator::assemble_special(statement *s, int label) {return "";} // TODO
 }
