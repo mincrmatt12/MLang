@@ -292,6 +292,9 @@ namespace x86_64 {
 		void inline operator()(Args &&...args) {
 			result += (emit_helper(std::forward<Args>(args)) + ...) + '\n';
 		}
+		void inline operator()() {
+			result += '\n';
+		}
 	private:
 		std::string &result;
 	};
