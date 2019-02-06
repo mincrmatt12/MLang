@@ -17,6 +17,8 @@ namespace x86_64 {
 		"qword"
 	};
 
+	const std::array<int, 5> calle_saved = {7, 10, 11, 12, 13};
+
 #define AnyS      {p_size::BYTE, p_size::WORD, p_size::DWORD, p_size::QWORD}
 #define WordS     {p_size::WORD, p_size::DWORD, p_size::QWORD}
 #define DWordS    {p_size::DWORD, p_size::QWORD}
@@ -308,6 +310,24 @@ namespace x86_64 {
 		emit("mov rbp, rsp");
 		if (local_stack_usage) emit("sub rsp, ", local_stack_usage);
 
+		bool add_extra_junk = false;
+
+		{
+			int last_reg;
+			// Push calle-saved registers.
+			for (const auto &csr : calle_saved) {
+				if (is_register_used(csr)) {
+					emit("push ", registers[3][csr]);
+					add_extra_junk = !add_extra_junk;
+					last_reg = csr;
+				}
+			}
+
+			if (add_extra_junk) {
+				emit("push ", registers[3][last_reg]);
+			}
+		}
+
 		// Check if the storage allocator put any of the parameters on the stack
 		
 		for (long i = 0; i < cu.num_params; ++i) {
@@ -341,6 +361,31 @@ namespace x86_64 {
 			const auto& stmt = stmts[i];
 			// check if we need to emit a label?
 			if (labels.count(stmt)) emit(".L", labels[stmt], ":");
+			// handle ret specially
+			if (si_ret(*stmt)) {
+				// Step 1, attempt to move the result into a.
+				storage s = get_storage_for(stmt->lhs());
+				if (!(s.type == storage::REG && s.regno == 6)) {
+					// Move the result in a
+					emit("mov ", storage{6, s.size}, ", ", s);
+				}
+				// Step 2, unclobber things.
+				for (auto i = calle_saved.rbegin(); i != calle_saved.rend(); ++i) {
+					if (is_register_used(*i)) {
+						emit("pop ", registers[3][*i]);
+						if (add_extra_junk) {
+							add_extra_junk = false;
+							emit("pop ", registers[3][*i]);
+						}
+					}
+				}
+				// Step 3, write the function epilogue
+				emit("mov rsp, rbp");
+				emit("pop rbp");
+				// Step 4, return
+				emit("ret");
+				continue;
+			}
 			// assemble an instruction
 			if (stmt->cond == nullptr)
 				result += assemble(stmt); // assemble also handles fcall / ret with some special logic
@@ -830,7 +875,11 @@ use_mem:
 		throw std::runtime_error("OUT OF REGISTERS OH NO POOOOOO");
 	}
 
+	bool codegenerator::is_register_used(int reg) {
+		return std::any_of(stores.begin(), stores.end(), [&](const auto&k) {return k.type == storage::REG && k.regno == reg;});
+	}
+
 	std::string codegenerator::assemble_special(statement *s, int label) {
-		return "; fcall/ret\n";
-	} // TODO
+		return "; fcall\n";
+	} 
 }
