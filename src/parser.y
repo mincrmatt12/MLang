@@ -416,7 +416,11 @@ expr: STR_CONST				{ $$ = interpret_literal(M($1));}
     | "false"				{ $$ = 0l;}
     | "null"				{ $$ = 0l;}
     | '(' expr ')'			{ $$ = M($2);}
-    | expr '[' expr ']'			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_deref(e_add(M($1), M($3)));}
+    | expr '[' expr ']'			{ ensure_cast($1, $3); ensure_cast($3, $1); 
+	// Get the pointer size
+	long sz = $1.get_type().ptr == nullptr ? 64 : $1.get_type().ptr->size;
+	sz /= 8;
+	$$ = e_deref(e_add(M($1), e_mul(M($3), sz)));}
     | '<' typespec '>' '(' expr ')'	{ $$ = cast(M($5), M($2));}
     | expr '(' ')'			{ $$ = e_fcall(M($1));}
     | expr '(' c_expr ')'		{ $$ = e_fcall(M($1)); $$.params.splice($$.params.end(), M($3.params));
