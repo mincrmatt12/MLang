@@ -46,8 +46,8 @@ namespace x86_64 {
 		{10, st_type::add,  "add %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::add,  "add %0, %2", {Mem(AnyS), SameAs(0), AnyReg(AnyS)}},
 		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm(MDWordS)}},
-		{12, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), AnyReg({p_size::QWORD})}},
-		{11, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), Imm(AnyS)}},
+		{12, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg({p_size::QWORD}), AnyReg({p_size::QWORD})}},
+		{11, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg({p_size::QWORD}), Imm(AnyS)}},
 		/* MUL */
 		{10, st_type::mul,  "imul %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm(MDWordS)}},
@@ -136,26 +136,26 @@ namespace x86_64 {
 			case GLOBAL:
 				switch (rs) {
 					case p_size::BYTE:
-						return "byte ptr [rel " + this->global + "]";
+						return "byte [rel " + this->global + "]";
 					case p_size::WORD:
-						return "word ptr [rel " + this->global + "]";
+						return "word [rel " + this->global + "]";
 					case p_size::DWORD:
-						return "dword ptr [rel " + this->global + "]";
+						return "dword [rel " + this->global + "]";
 					case p_size::QWORD:
-						return "qword ptr [rel " + this->global + "]";
+						return "qword [rel " + this->global + "]";
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}	
 			case STACKOFFSET:
 				switch (rs) {
 					case p_size::BYTE:
-						return "byte ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+						return "byte [rbp - " + std::to_string(imm_or_offset) + "]";
 					case p_size::WORD:
-						return "word ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+						return "word [rbp - " + std::to_string(imm_or_offset) + "]";
 					case p_size::DWORD:
-						return "dword ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+						return "dword [rbp - " + std::to_string(imm_or_offset) + "]";
 					case p_size::QWORD:
-						return "qword ptr [rbp - " + std::to_string(imm_or_offset) + "]";
+						return "qword [rbp - " + std::to_string(imm_or_offset) + "]";
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}	
