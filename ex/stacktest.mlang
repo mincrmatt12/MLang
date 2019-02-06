@@ -1,0 +1,11 @@
+#include stdlib.mlang
+#include stack.mlang
+
+main(argc, 8** argv) = {
+	var 64* my_stack = stack_new();
+	stack_push(my_stack, 24);
+	stack_push(my_stack, 27);
+	printf("The top of stack, after pop = %d\n", stack_pop(my_stack));
+	stack_free(my_stack);
+	return 0;
+}

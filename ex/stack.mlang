@@ -1,0 +1,34 @@
+#include stdlib.mlang
+
+// Extremely basic stack declaration
+// Since mlang has barely any support for objects, we use a malloc'd buffer and pointer offsets in it.
+// A stack is a dynamic array, and therefore uses malloc/free/realloc.
+// The first 64 in the array is the size (in indicies)
+// The top of the stack is defined as the value in index[obj[0]]];
+// Push is increase obj[0], set obj[obj[0]] = new_obj
+// Pop is record obj[obj[0]], decrease obj[0]
+
+stack_new<64 *>() = {
+	var 64* stck = malloc(8);
+	stck[0] = 0;
+	return stck;
+}
+
+stack_free(64 * stck) = {
+	free(stck);
+}
+
+stack_push(64 * stck, 64 val) = {
+	++stck[0];
+	realloc(stck, 8 + stck[0] * 8);
+	stck[stck[0]] = val;
+}
+
+stack_pop<64>(64 * stck) = {
+	var 64 result = stck[stck[0]];
+	--stck[0];
+	return result; // No realloc for better performance, further pushes will realloc
+}
+
+stack_height<64>(64 * stck) = return stck[0];
+

@@ -6,5 +6,6 @@ extern getchar <8>();
 extern printf(8* fmt, ...);
 extern scanf(8* fmt, ...);
 
-extern malloc(size);
-extern free(ptr);
+extern malloc<64 *>(64 size);
+extern free(64 * ptr);
+extern realloc<64 *>(64 * ptr, 64 size);
