@@ -187,7 +187,7 @@ inline expression cast(expression &&e, ex_rtype &&rt) {
 	return expression(std::forward<ex_rtype>(rt), std::forward<expression>(e));
 }
 
-static void ensure_cast(expression &tgt, const expression &other) {
+static void ensure_cast(expression &tgt, const expression &other, bool allow_downcast=false) {
 	auto tt = tgt.get_type(), ot = other.get_type();
 	if (ot.ptr != nullptr && tt.ptr == nullptr) {
 		// Cast the target to be a pointer type, as we can always upcast to a pointer
@@ -202,7 +202,7 @@ static void ensure_cast(expression &tgt, const expression &other) {
 		return; // Cast the other argument instead
 	}
 	// There are no pointers, check if we would need a downcast
-	if (tt.size > ot.size) return;
+	if (tt.size > ot.size && !allow_downcast) return;
 
 	// Otherwise, cast tt.size to ot.size
 	tgt = cast(std::move(tgt), std::move(ex_rtype(ot)));
@@ -445,13 +445,13 @@ expr: STR_CONST				{ $$ = M($1);}
 					  $$ = e_comma(M($$), e_l_or(e_eq(C($1), C($3)), e_gt(C($1), C($3)))); }
     | expr '>' expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_gt(M($1), M($3));}
     | expr "<=" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(e_gt(M($1), M($3)), 0l);}
-    | expr "+=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "+=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(C($1), M($3)); } }
-    | expr "-=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
+    | expr "-=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_add(e_deref(a.params.back()), e_neg(M($3))) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_add(C($1), e_neg(M($3))); } }
-    | expr "*=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_mul(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "*=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_mul(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_mul(C($1), M($3)); }}
-    | expr "/=" expr			{ if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    | expr "/=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_div(C($1), M($3)); } }
     | expr "||" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_or(M($1), M($3));}
     | expr "&&" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_and(M($1), M($3));}
