@@ -268,7 +268,7 @@ namespace x86_64 {
 
 		// TODO: create the proper place for init.....
 		
-		//output += output_string_table(string_table);
+		if (!string_table.empty()) output += output_string_table(string_table);
 		//output += output_bss_section();
 
 		return output;
@@ -1006,5 +1006,13 @@ other:
 		emit("section .text");
 
 		return result;
+	}
+
+	std::string codegenerator::output_string_table(std::string table) {
+		std::string result = "__STRTABLE: db ";
+		for (const auto &c : table) {
+			result += std::to_string((int)c) + ',';
+		}
+		return result.substr(0, result.size()-1) + '\n';
 	}
 }
