@@ -88,6 +88,10 @@ namespace x86_64 {
 		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), AnyReg({p_size::WORD})}},
 		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), AnyReg({p_size::DWORD})}},
 		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), AnyReg({p_size::QWORD})}},
+		{10, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), Imm({p_size::BYTE})}},
+		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), Imm(MWordS)}},
+		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), Imm(DWordS)}},
+		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), Imm(AnyS)}},
 		/* EQ */
 		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::eq,   "cmp %2, %1 | sete %0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
@@ -104,6 +108,7 @@ namespace x86_64 {
 		{13, st_type::cast, "mov %0, 0 | mov %0, %b1", {Mem({p_size::BYTE}), AnyReg(WordS)}},
 		{13, st_type::cast, "mov %0, 0 | mov %0, %w1", {Mem({p_size::WORD}), AnyReg(DWordS)}},
 		{13, st_type::cast, "mov %0, 0 | mov %0, %d1", {Mem({p_size::DWORD}), AnyReg({p_size::QWORD})}},
+		{ 9, st_type::cast, "mov %0, %1", {RegMem(AnyS), Imm(AnyS)}}, // fallback case, let the assembler deal with this. -- if the number is too big it should clip it
 		/* FCALL & RET - special */
 		/* ADDROF */
 		{10, st_type::addrof, "lea %0, %1", {AnyReg(AnyS), Mem(AnyS)}},
