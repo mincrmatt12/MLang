@@ -138,13 +138,13 @@ namespace x86_64 {
 			case GLOBAL:
 				switch (rs) {
 					case p_size::BYTE:
-						return "byte [rel " + this->global + " wrt data]";
+						return "byte [rel " + this->global + " wrt .bss]";
 					case p_size::WORD:
-						return "word [rel " + this->global + " wrt data]";
+						return "word [rel " + this->global + " wrt .bss]";
 					case p_size::DWORD:
-						return "dword [rel " + this->global + " wrt data]";
+						return "dword [rel " + this->global + " wrt .bss]";
 					case p_size::QWORD:
-						return "qword [rel " + this->global + " wrt data]";
+						return "qword [rel " + this->global + " wrt .bss]";
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}	
@@ -182,7 +182,7 @@ namespace x86_64 {
 	std::string storage::addr_string() const {
 		switch (this->type) {
 			case GLOBAL:
-				return "[rel " + this->global + " wrt data]";
+				return "[rel " + this->global + " wrt .bss]";
 			case STACKOFFSET:
 				return "[rbp - " + std::to_string(imm_or_offset) + "]";
 			case IMM:
