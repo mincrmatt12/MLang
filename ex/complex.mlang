@@ -21,6 +21,10 @@ main(argc, argv) = {
 		scanf("%s", chptr);
 		printf("Hello, %s. You entered %i characters\n", chptr, strlen(chptr));
 		free(chptr);
+		printf("What is you favorite number? ");
+		var 32 in_n = 0;
+		scanf("%d", &in_n);
+		printf("You entered %d\n", in_n);
 		return 0;
 	}
 }

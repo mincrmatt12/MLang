@@ -114,7 +114,7 @@ namespace x86_64 {
 		{ 9, st_type::cast, "mov %0, %1", {RegMem(AnyS), Imm(AnyS)}}, // fallback case, let the assembler deal with this. -- if the number is too big it should clip it
 		/* FCALL & RET - special */
 		/* ADDROF */
-		{10, st_type::addrof, "lea %0, %1", {AnyReg(AnyS), Mem(AnyS)}},
+		{10, st_type::addrof, "lea %0, %n1", {AnyReg(AnyS), Mem(AnyS)}},
 		/* STR */
 		{10, st_type::str,  "lea %0, [rel __STRTABLE]", {AnyReg(AnyS)}}
 	};
@@ -176,6 +176,18 @@ namespace x86_64 {
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}
+		}
+	}
+
+	std::string storage::addr_string() const {
+		switch (this->type) {
+			case GLOBAL:
+				return "[rel " + this->global + " wrt data]";
+			case STACKOFFSET:
+				return "[rbp - " + std::to_string(imm_or_offset) + "]";
+			case IMM:
+			case REG:
+				return "";
 		}
 	}
 
@@ -464,7 +476,7 @@ namespace x86_64 {
 				// This needs to go onto the stack, so allocate another 
 				local_stack_usage += maximum_seen_size[i] / 8;
 				
-				allocate(i, storage::STACKOFFSET, local_stack_usage + 8, (uint8_t)maximum_seen_size[i]);
+				allocate(i, storage::STACKOFFSET, local_stack_usage, (uint8_t)maximum_seen_size[i]);
 
 				if (i < current->num_params) ++regno; // this could be improved: TODO optimize this stuff
 			}
@@ -817,11 +829,19 @@ use_mem:
 								size_override = 64;
 								++i;
 								break;
+							case 'n':
+								size_override = 255;
+								++i;
 							default:
 								break;
 						}
 						int offset = chosen_recipe->pattern[i] - '0';
 
+						if (size_override == 255) {
+							result += stores[offset].addr_string();
+							++i;
+							continue;
+						}
 						// Substitude the recipe.
 						result += (size_override ? storage{stores[offset], size_override} : stores[offset]).to_string();
 						++i;

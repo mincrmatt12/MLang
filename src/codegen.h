@@ -87,6 +87,7 @@ namespace x86_64 {
 
 		std::string to_string() const;
 		std::string to_string(p_size requested_size) const;
+		std::string addr_string() const;
 
 		bool matches(const match_t& m) const;
 		bool matches(const match_t& m, const std::vector<storage> &others) const;
