@@ -53,8 +53,8 @@ std::string preprocess_string(std::istream &in, std::string filename) {
 							out += preprocess_string(f, fname);
 							out += "#file " + filename + '\n';
 							out += "#line " + std::to_string(lineno + 1) + '\n';
-							continue;
 						} 
+						continue;
 					}
 				}
 				else if (command == "line" || command == "file") {}
