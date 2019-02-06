@@ -46,7 +46,8 @@ namespace x86_64 {
 		{10, st_type::add,  "add %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::add,  "add %0, %2", {Mem(AnyS), SameAs(0), AnyReg(AnyS)}},
 		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm(MDWordS)}},
-		{12, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), RegImm(AnyS)}},
+		{12, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), AnyReg({p_size::QWORD})}},
+		{11, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg(AnyS), Imm(AnyS)}},
 		/* MUL */
 		{10, st_type::mul,  "imul %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
 		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm(MDWordS)}},
