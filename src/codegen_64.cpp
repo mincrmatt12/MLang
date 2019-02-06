@@ -425,6 +425,16 @@ namespace x86_64 {
 	std::string codegenerator::assemble(statement* stmt, int labelno) {
 		if (si_fcall(*stmt) || si_ret(*stmt)) return assemble_special(stmt, labelno);
 
+		// As a precaution, check if we are
+		//  - compiling a cast
+		//  - where both rt sizes are the same
+		// If so:
+		//  - reinit the statement hastily as a mov
+		if (si_cast(*stmt) && stmt->lhs().rt.size == stmt->rhs().rt.size) {
+			// Reinit
+			stmt->t = st_type::mov;
+		}
+
 		// This happens in multiple phases:
 		//  - First, attempt to find a perfect match. Pick the one with the least cost, and return
 		//   
