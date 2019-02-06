@@ -259,7 +259,7 @@ namespace x86_64 {
 	}
 
 	std::string codegenerator::generate() {
-		std::string output = /* generate_prologue() */ {};
+		std::string output = generate_prologue();
 		
 		for (auto&[k, v] : func_compileunits) {
 			output += k + ":\n";
@@ -987,4 +987,21 @@ other:
 		}
 		return "; unknown\n";
 	} 
+
+	std::string codegenerator::generate_prologue() {
+		// Prologue: needs A) globals B) externs C) section .text
+		std::string result{};
+		auto emit = emitter(result);
+		
+		for (const auto&[k, _] : func_compileunits) {
+			emit("global ", k);
+		}
+		emit();
+		for (const auto&v : ext_list) {
+			emit("extern ", v.name);
+		}
+		emit("section .text");
+
+		return result;
+	}
 }
