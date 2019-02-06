@@ -23,12 +23,12 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 
 	DUMP_T std::cout << "optimizing" << std::endl;
 	while (
-			optimize_deadcode() ||
-			optimize_jumpthread() ||
+			optimize_deadcode()    ||
+			optimize_jumpthread()  ||
 			optimize_deduplicate() ||
 			optimize_copyelision() ||
-			optimize_simplify() || 
-			optimize_rename()  ||
+			optimize_simplify()    || 
+			optimize_rename()      ||
 			optimize_canonize()
 	) { }
 	remove_register_holes();
