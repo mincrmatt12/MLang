@@ -79,10 +79,10 @@ namespace x86_64 {
 		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), Imm(MDWordS)}},
 		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* READ */
-		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg({p_size::BYTE})}},
-		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg({p_size::WORD})}},
-		{11, st_type::read, "xor %q0, %q0 | mov %0, dword [%1]", {AnyReg({p_size::DWORD}), AnyReg({p_size::DWORD})}},
-		{11, st_type::read, "xor %q0, %q0 | mov %0, qword [%1]", {AnyReg({p_size::QWORD}), AnyReg({p_size::QWORD})}},
+		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg(AnyS)}},
+		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg(AnyS)}},
+		{11, st_type::read, "xor %q0, %q0 | mov %0, dword [%1]", {AnyReg({p_size::DWORD}), AnyReg(AnyS)}},
+		{11, st_type::read, "xor %q0, %q0 | mov %0, qword [%1]", {AnyReg({p_size::QWORD}), AnyReg(AnyS)}},
 		/* WRITE */
 		{10, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), AnyReg({p_size::BYTE})}},
 		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), AnyReg({p_size::WORD})}},
