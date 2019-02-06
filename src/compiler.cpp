@@ -10,14 +10,12 @@ compiler::compiler(astoptimizecontext &&ctx) : currently_compiling(&global_inits
 		return e_assign(e, identifier{id_type::global_var, i, ""});
 	};
 
-	if (ctx.global_inits.size() == 1) {
-		global_initscope.e = make_set(0, std::move(ctx.global_inits[0]));
-	}
-	else if (ctx.global_inits.size() > 1) {
+	if (ctx.global_inits.size() > 0) {
 		global_initscope.e = e_comma();
 		for (int i = 0; i < ctx.global_inits.size(); ++i) {
 			global_initscope.e.params.emplace_back(std::move(make_set(i, std::move(ctx.global_inits[i]))));	
 		}
+		global_initscope.e.params.push_back(e_ret(0l));
 	}
 	ext_list = std::move(ctx.ext_functions);
 }

@@ -1,0 +1,9 @@
+// Test global variables
+#include stdlib.mlang
+
+static 64 va = 2+2;
+
+main(argc, 8** argv) = {
+	printf("Test va = %d", va);
+	return 0;
+}

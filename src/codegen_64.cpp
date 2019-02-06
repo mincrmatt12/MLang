@@ -138,13 +138,13 @@ namespace x86_64 {
 			case GLOBAL:
 				switch (rs) {
 					case p_size::BYTE:
-						return "byte [rel " + this->global + " wrt .bss]";
+						return "byte [rel " + this->global + "]";
 					case p_size::WORD:
-						return "word [rel " + this->global + " wrt .bss]";
+						return "word [rel " + this->global + "]";
 					case p_size::DWORD:
-						return "dword [rel " + this->global + " wrt .bss]";
+						return "dword [rel " + this->global + "]";
 					case p_size::QWORD:
-						return "qword [rel " + this->global + " wrt .bss]";
+						return "qword [rel " + this->global + "]";
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}	
@@ -182,7 +182,7 @@ namespace x86_64 {
 	std::string storage::addr_string() const {
 		switch (this->type) {
 			case GLOBAL:
-				return "[rel " + this->global + " wrt .bss]";
+				return "[rel " + this->global + "]";
 			case STACKOFFSET:
 				return "[rbp - " + std::to_string(imm_or_offset) + "]";
 			case IMM:
@@ -277,11 +277,17 @@ namespace x86_64 {
 			output += k + ":\n";
 			output += generate_unit(v);
 		}
-
-		// TODO: create the proper place for init.....
 		
 		if (!string_table.empty()) output += output_string_table(string_table);
-		//output += output_bss_section();
+
+		auto bss = output_bss_section();
+		if (!bss.empty()) {
+			output += "__mlang_init:\n";
+			output += generate_unit(global_initscope);
+			output += "section .init_array\n";
+			output += "dq __mlang_init\n\n";
+			output += bss;
+		}
 
 		return output;
 	}
@@ -870,7 +876,14 @@ use_mem:
 			return {storage::IMM, ar.num};
 		}
 		else {
-			return {ar.ident.name, static_cast<uint8_t>(ar.ident.t.size)};
+			switch (ar.ident.type) {
+				case id_type::function:
+					return {ar.ident.name, static_cast<uint8_t>(ar.ident.t.size)};
+				case id_type::global_var:
+					return {std::string{"G"} + std::to_string(ar.ident.index), static_cast<uint8_t>(ar.ident.t.size)};
+				default:
+					throw std::runtime_error("invalid id_type in gsf");
+			}
 		}
 	}
 
@@ -1034,5 +1047,33 @@ other:
 			result += std::to_string((int)c) + ',';
 		}
 		return result.substr(0, result.size()-1) + '\n';
+	}
+
+	std::string codegenerator::output_bss_section() {
+		// Find all globals by going through the init method
+		
+		std::string result;
+		auto emit = emitter(result);
+
+		std::map<std::string, int> resolved_sizes;
+		
+		traverse_f(this->global_initscope.start, [&](const auto& a){
+			for (const addr_ref &b : a->params) {
+				if (ai_ident(b) && b.ident.type == id_type::global_var) {
+					resolved_sizes[std::string{"G"} + std::to_string(b.ident.index)] = b.ident.t.size;
+				}
+			}
+		});
+
+		// Allocate space in the bss section
+		
+		if (!resolved_sizes.empty()) {
+			emit("section .bss");
+			for (const auto &[k, v] : resolved_sizes) {
+				emit(k, ": resb ", v / 8);
+			}
+		}
+
+		return result;
 	}
 }
