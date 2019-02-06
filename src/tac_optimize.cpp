@@ -217,6 +217,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 
 	// Now, lets remove any reads to a register where the ony source of the register is a mov where the rhs is a literal
         if (do_replace_literal_params()) traverse_f(optimizing->start, [&](statement *s){
+			if (si_addrof(*s)) return;
 			int i = 0;
 			s->for_all_write([&](auto){++i;});
 			s->for_all_read([&](auto &reg){
