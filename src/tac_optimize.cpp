@@ -232,6 +232,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 				if (!std::all_of(d.begin(), d.end(), [&](auto &source){
 							// Make sure that a) this is a mov and b) it's arg is a literal and c) the literal is equal for the first statement
 							statement * s2 = *std::get_if<statement *>(&source);
+							if (si_fcall(*s) && si_mov(*s2) && ai_num(s2->rhs()) && s2->rhs().rt.ptr != nullptr) return false;
 							return si_mov(*s2) && ai_num(s2->rhs()) && s2->rhs().num == (last == ~0 ? (last = s2->rhs().num) : last);
 				})) return;
 				// OK! The only sources of this register all agree on one constant literal.

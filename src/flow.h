@@ -47,7 +47,7 @@ private:
 		}
 		if (!changes) return;
 
-		if (follow_copies && si_mov(*where)) {
+		if (follow_copies && (si_mov(*where) || si_addrof(*where))){
 
 			// make sure both arguments are registers
 			if (ai_reg(where->lhs()) && ai_reg(where->rhs())) {
@@ -59,6 +59,9 @@ private:
 			}
 			if (ai_reg(where->lhs())) {
 				state[where->lhs().num] = {where};
+			}
+			if (si_addrof(*where) && ai_reg(where->rhs())) {
+				state[where->rhs().num] = {where};
 			}
 		}
 		else {
@@ -82,6 +85,11 @@ private:
 										data[writer].parameters[index2].insert(where);
 									}
 								});
+								if (si_addrof(*writer)) {
+									if (writer->rhs() == reg) {
+										data[writer].parameters[1].insert(where);
+									}
+								}
 							}
 
 							return mydata.parameters[index].insert(source).second;
@@ -91,6 +99,10 @@ private:
 			where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
 
 			if (include_ifnz && si_ifnz(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
+
+			if (si_addrof(*where) && ai_reg(where->rhs())) {
+				state[where->rhs().num] = {where};
+			}
 		}
 
 		if (where->cond != nullptr) {
