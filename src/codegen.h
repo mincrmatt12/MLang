@@ -76,7 +76,11 @@ namespace x86_64 {
 
 		storage() : type(REG), regno(-1) {}
 		storage(int regno, uint8_t t) : type(REG), regno(regno), size(t) {};
-		storage(type_t t, long imm) : type(t), imm_or_offset(imm) {};
+		storage(type_t t, long imm) : type(t), imm_or_offset(imm) {
+			if (imm < 256) size = 8;
+			else if (imm < 65536) size = 16;
+			else size = 32;
+		}
 		storage(type_t t, long imm, uint8_t rt) : type(t), imm_or_offset(imm), size(rt) {};
 		storage(std::string g, uint8_t t) : type(GLOBAL), global(g), size(t) {};
 		storage(const storage& s, uint8_t si) : type(s.type), regno(s.regno), imm_or_offset(s.imm_or_offset), global(s.global), size(si) {};
