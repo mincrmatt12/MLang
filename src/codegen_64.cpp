@@ -138,13 +138,13 @@ namespace x86_64 {
 			case GLOBAL:
 				switch (rs) {
 					case p_size::BYTE:
-						return "byte [rel " + this->global + "]";
+						return "byte [rel " + this->global + " wrt data]";
 					case p_size::WORD:
-						return "word [rel " + this->global + "]";
+						return "word [rel " + this->global + " wrt data]";
 					case p_size::DWORD:
-						return "dword [rel " + this->global + "]";
+						return "dword [rel " + this->global + " wrt data]";
 					case p_size::QWORD:
-						return "qword [rel " + this->global + "]";
+						return "qword [rel " + this->global + " wrt data]";
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}	
@@ -952,9 +952,16 @@ use_mem:
 
 			// Call function
 			if (ai_ident(call_tgt)) {
-				emit("call [rel ", call_tgt.ident.name, "]");
+				if (call_tgt.ident.type == id_type::function) {
+					emit("call ", call_tgt.ident.name);
+				}
+				else if (call_tgt.ident.type == id_type::extern_function) {
+					emit("call [rel ", call_tgt.ident.name, " wrt ..got]");
+				}
+				else goto other;
 			}
 			else {
+other:
 				emit("call ", storage{get_storage_for(call_tgt), 64});
 			}
 
