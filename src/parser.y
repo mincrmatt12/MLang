@@ -110,6 +110,8 @@ struct identifier {
 	}
 };
 
+std::string interpret_literal(std::string &&m);
+
 #define ENUM_EXPRESSIONS(o) \
 	o(nop) o(string_ref) o(literal_number) o(ident) /* nop, atomic types (char is converted to a literal number before here) */\
 	o(add) o(neg) o(mul) o(mod) o(div) o(eq) o(gt)		/* arithmetic operators (sub is converted from neg + add) mul does not have a simpler repr, overrideable with smath_mul func */ \
@@ -406,7 +408,7 @@ comp_stmt: '{'				{ ++ctx; $$ = e_comma();}
 c_expr: c_expr ',' expr			{ $$ = M($1); $$.params.push_back(M($3));}
       | expr				{ $$ = e_comma(M($1));};
 
-expr: STR_CONST				{ $$ = M($1);}
+expr: STR_CONST				{ $$ = interpret_literal(M($1));}
     | INT_LITERAL			{ $$ = $1;}
     | CHAR_LITERAL			{ $$ = $1;}
     | IDENTIFIER			{ $$ = ctx.use_name($1);}
@@ -682,4 +684,36 @@ ex_rtype expression::get_type() const {
 				}
 			}
 	}
+}
+
+std::string interpret_literal(std::string &&m) {
+   std::string result{};
+   for (size_t i = 0; i < m.size();) {
+   		switch (m[i]) {
+			case '\\':
+				++i;
+				switch (m[i]) {
+					case 'n':
+						result += '\n'; ++i;
+						break;
+					case 't':
+						result += '\t'; ++i;
+						break;
+					case 'r':
+						result += '\r'; ++i;
+						break;
+					case '0':
+						result += '\0'; ++i;
+						break;
+					default:
+						result += m[i]; ++i;
+						break;
+				}
+				break;
+			default:
+				result += m[i]; ++i;
+				break;
+		}
+   }
+   return result;
 }

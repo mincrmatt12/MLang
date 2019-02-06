@@ -19,7 +19,7 @@ main(argc, argv) = {
 		printf("What is your name? ");
 		var chptr = malloc(50);
 		scanf("%s", chptr);
-		printf("Hello, %s. You entered %i characters", chptr, strlen(chptr));
+		printf("Hello, %s. You entered %i characters\n", chptr, strlen(chptr));
 		free(chptr);
 		return 0;
 	}
