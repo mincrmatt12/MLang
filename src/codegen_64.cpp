@@ -96,11 +96,11 @@ namespace x86_64 {
 		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), Imm(DWordS)}},
 		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), Imm(AnyS)}},
 		/* EQ */
-		{10, st_type::eq,   "cmp %1, %2 | sete %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::eq,   "cmp %2, %1 | sete %0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
+		{10, st_type::eq,   "cmp %1, %2 | sete %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::eq,   "cmp %2, %1 | sete %b0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
 		/* GT */
-		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::gt,   "cmp %1, %2 | seta %0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
 		/* CAST */
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(DWordS), RegMem({p_size::WORD})}},
