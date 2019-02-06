@@ -706,13 +706,16 @@ namespace x86_64 {
 						// Otherwise, this means that we have to convert a ThrAC to a TwAC.
 						// Do this by emitting a mov.
 						if (chosen_stores[possible][0].type == storage::REG) {
-							emit("mov ", chosen_stores[possible][0], ", ", stores[1]);
+							if (stores[i].type == storage::IMM) 
+								emit("mov ", storage{chosen_stores[possible][0], 64}, ", ", stores[i]);
+							else
+								emit("mov ", chosen_stores[possible][0], ", ", stores[i]);
 							// Mark chosen storage
 							chosen_stores[possible][i] = chosen_stores[possible][0];
 						}
 						else if ((chosen_stores[possible][0].type == storage::STACKOFFSET || chosen_stores[possible][0].type == storage::GLOBAL) && (stores[i].type == storage::REG || stores[i].type == storage::IMM)) {
 							// Also use a mov, but increase the cost
-							emit("mov ", chosen_stores[possible][0], ", ", stores[1]);
+							emit("mov ", chosen_stores[possible][0], ", ", stores[i]);
 							added_costs[possible]++;
 							// Mark chosen storage
 							chosen_stores[possible][i] = chosen_stores[possible][0];
@@ -972,7 +975,10 @@ use_mem:
 					if (s_cur.type == storage::REG && s_cur.regno == i - 2) continue; // already in the right place.
 					else {
 						// We need to move this value in.
-						emit("mov ", storage{i - 2, s_cur.size}, ", ", s_cur);
+						if (s_cur.type == storage::IMM)
+							emit("mov ", storage{i - 2, 64}, ", ", s_cur);
+						else
+							emit("mov ", storage{i - 2, s_cur.size}, ", ", s_cur);
 					}
 				}
 			}
