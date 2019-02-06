@@ -1030,7 +1030,7 @@ other:
 		auto emit = emitter(result);
 		
 		for (const auto&[k, _] : func_compileunits) {
-			emit("global ", k);
+			emit("global ", k, ":function");
 		}
 		emit();
 		for (const auto&v : ext_list) {
