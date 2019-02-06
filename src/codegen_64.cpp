@@ -360,7 +360,7 @@ namespace x86_64 {
 		std::map<long, std::set<req>> storage_requirements{};
 		std::map<long, long> maximum_seen_size{};
 		access_info info(*current, false, false);
-		long maximum_register = 0;
+		long maximum_register = current->num_params;
 
 		traverse_f(current->start, [&](statement *& stmt){
 			// First check for MEMORY reqs
