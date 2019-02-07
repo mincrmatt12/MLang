@@ -944,13 +944,6 @@ use_mem:
 
 			if (stack_add_amount) emit("sub rsp, ", stack_add_amount);
 
-			// Check if the target has varargs.
-			const auto &call_tgt = *(++s->params.begin());
-			if (ai_ident(call_tgt) && call_tgt.ident.type == id_type::extern_function && ext_list[call_tgt.ident.index].varargs) {
-				// Set al to 0
-				emit("mov al, 0");
-			}
-
 			// Check if we need to use the special method for handling registers
 			std::set<int> used_so_far;
 			bool alright = true;
@@ -990,6 +983,13 @@ use_mem:
 				for (int i = 0, j = s->params.size() - 1; j >= 2; --j, ++i) {
 					emit("pop ", storage{static_cast<int>((s->params.size() - 3) - i), std::max((uint8_t)16, get_storage_for(s->params[j]).size)});
 				}
+			}
+
+			// Check if the target has varargs.
+			const auto &call_tgt = *(++s->params.begin());
+			if (ai_ident(call_tgt) && call_tgt.ident.type == id_type::extern_function && ext_list[call_tgt.ident.index].varargs) {
+				// Set al to 0
+				emit("mov al, 0");
 			}
 
 			// Call function
