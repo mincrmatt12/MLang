@@ -78,9 +78,9 @@ namespace x86_64 {
 		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(AnyS), RegMem(AnyS)}},
 		/* IFGT */
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), AnyReg(AnyS)}},
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), Imm(MDWordS)}},
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), AnyReg(AnyS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), Imm(MDWordS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg(AnyS)}},
 		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg(AnyS)}},
@@ -99,8 +99,8 @@ namespace x86_64 {
 		{10, st_type::eq,   "cmp %1, %2 | sete %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::eq,   "cmp %2, %1 | sete %b0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
 		/* GT */
-		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
 		/* CAST */
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(DWordS), RegMem({p_size::WORD})}},
