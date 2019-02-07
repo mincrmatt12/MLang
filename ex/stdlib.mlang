@@ -5,6 +5,7 @@
 extern getchar <8>();
 extern printf(8* fmt, ...);
 extern scanf(8* fmt, ...);
+extern puts(8* txt);
 
 extern malloc<64 *>(64 size);
 extern free(64 * ptr);
