@@ -191,6 +191,7 @@ struct compilation_unit {
 	statement ** tgt;
 	unsigned num_params = 0; unsigned num_locals = 0;
 	unsigned counter = 0;
+	std::vector<ex_rtype> parameter_types;
 	
 	compilation_unit() : tgt(&start) {};
 
@@ -198,6 +199,7 @@ struct compilation_unit {
 		e = std::move(n.code);
 		num_params = std::move(n.num_args);
 		num_locals = std::move(n.num_vars);
+		parameter_types = std::move(n.vtypes);
 		counter = num_params + num_locals;
 		tgt = &start;
 	}

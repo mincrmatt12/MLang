@@ -331,6 +331,22 @@ namespace x86_64 {
 		emit("mov rbp, rsp");
 		if (local_stack_usage) emit("sub rsp, ", local_stack_usage);
 
+		// Fix arguments to be the right zero-extends
+		for (int argno = 0; argno < cu.num_params; ++argno) {
+			switch (cu.parameter_types[argno].size) {
+				case 32:
+					emit("mov ", storage{argno, 32}, ", ", storage{argno, 32});
+					break;
+				case 16:
+					emit("and ", storage{argno, 64}, ", 0xffff");
+					break;
+				case 8:
+					emit("and ", storage{argno, 64}, ", 0xff");
+				default:
+					break;
+			}
+		}
+
 		bool add_extra_junk = false;
 
 		{
