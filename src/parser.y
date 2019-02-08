@@ -254,8 +254,19 @@ struct parsecontext
 	unsigned tempvar_count = 0; //creates temporary values
 	function current_fun{}; // contains the current function being parsed
 	ext_function current_ext{};
+
+	std::map<std::string, identifier> temporary_forwards;
+	bool forward_decling = false;;
 public:
 	const identifier& define(const std::string& name, identifier && f) {
+		if (f.type == id_type::function && temporary_forwards.count(name)) {
+			f.index = temporary_forwards[name].index;
+			temporary_forwards.erase(name);
+		}
+		else if (forward_decling && f.type == id_type::function) {
+			temporary_forwards[name] = f;
+			return temporary_forwards[name];
+		}
 		auto r = (scopes.size() == 0 ? global_ids : scopes.back()).emplace(name, std::move(f));
 		if (!r.second) throw yy::mlang_parser::syntax_error(loc, "Duplicate definition of " + name);
 		return r.first->second;
@@ -273,8 +284,16 @@ public:
 		return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name, std::move(t)});
 	}
 	expression defglobvar(const std::string& name, ex_rtype t)	{(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); return define(name, identifier{id_type::global_var,       num_globals++, name, std::move(t)});}
-	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name});}
-	expression defun(const std::string& name, ex_rtype t)	{return define(name, identifier{id_type::function, func_list.size(), name, t});}
+	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name}); current_fun = {};}
+	expression defun(const std::string& name, ex_rtype t)	{return define(name, identifier{id_type::function, func_list.size(), name, t}); current_fun = {};}
+	expression deforward(const std::string& name) {
+		forward_decling = true;
+		return define(name, identifier{id_type::function, func_list.size(), name});
+	}
+	expression deforward(const std::string& name, ex_rtype t) {
+		forward_decling = true;
+		return define(name, identifier{id_type::function, func_list.size(), name, t});
+	}
 	expression defexternal(const std::string& name)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
 	expression defexternal(const std::string& name, ex_rtype t)	{return define(name, identifier{id_type::extern_function,  ext_list.size(), name, t});} // 0 as external functions are pretty much magic references; taking pointers to them is illegal, etc.
 	expression defparm(const std::string& name, ex_rtype t)	{
@@ -284,6 +303,10 @@ public:
 		}
 		(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); 
 		return define(name, identifier{id_type::parameter,        current_fun.num_args++, name, std::move(t)});
+	}
+
+	void stopforward() {
+		forward_decling = false;
 	}
 
 	void defvarargs() {
@@ -307,6 +330,9 @@ public:
 		if (auto i = global_ids.find(name); i != global_ids.end()) 
 		{
 			return i->second;
+		}
+		if (temporary_forwards.count(name)) {
+			return temporary_forwards[name]; // forward declaration.
 		}
 		throw yy::mlang_parser::syntax_error(loc, "Use of id " + name + " before definition.");
 	}
@@ -341,7 +367,7 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 } // end %code
 
 %token END 0
-%token RETURN "return" WHILE "while" IF "if" VAR "var" STATIC "static" EXTERN "extern" ELSE "else"
+%token RETURN "return" WHILE "while" IF "if" VAR "var" STATIC "static" EXTERN "extern" ELSE "else" FORWARD "forward"
 %token TRUE "true" FALSE "false" NULL_CONST "null"
 
 %token OR "||" AND "&&" EQ "==" NE "!=" PP "++" MM "--" ADD_EQ "+=" SUB_EQ "-=" MUL_EQ "*=" DIV_EQ "/=" ELLIPSIS "..." LT_EQ "<=" GT_EQ ">="
@@ -369,7 +395,12 @@ library: defs;
 defs: defs function
     | defs "extern" extern_function ';'
     | defs "static" var_decl {ctx.defglobvar($3.name, $3.t); ctx.global_initializers.emplace_back(M($3.v));}';'
+	| defs "forward" forward_function ';'
     | %empty;
+
+forward_function: IDENTIFIER {ctx.deforward(M($1));} '(' paramdecls ')' {ctx.stopforward();}
+				| IDENTIFIER '<' typespec '>' {ctx.deforward(M($1), M($3));} '(' paramdecls ')' {ctx.stopforward();}
+				;
 
 function: IDENTIFIER {ctx.defun($1); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($7)); --ctx;}
 		| IDENTIFIER '<' typespec '>' {ctx.defun($1, $3); ++ctx; } '(' paramdecls ')' '=' stmt {ctx.add_function(M($1), M($10)); --ctx;};
@@ -545,6 +576,7 @@ re2c:define:YYMARKER	= "re2c_marker";
 "extern"                         { return tk(EXTERN); }
 "if"                             { return tk(IF); }
 "else"                           { return tk(ELSE); }
+"forward"						 { return tk(FORWARD); }
 
 // Constants
 
