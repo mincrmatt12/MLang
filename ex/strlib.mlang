@@ -1,0 +1,8 @@
+// str operations
+// mlang native
+
+strlen(b) = {
+	var 64 len = 0;
+	while (*b++ != 0) ++len;
+	return len;
+}
