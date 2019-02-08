@@ -71,7 +71,7 @@ private:
 					int regno = reg.num;
 					changes += std::count_if(state[regno].begin(), state[regno].end(), [&](const auto& source){
 							auto writer_ = std::get_if<statement *>(&source);
-							auto writer = writer_ == nullptr ? nullptr : *writer_;
+							statement * writer = writer_ == nullptr ? nullptr : *writer_;
 							int i2 = 0;
 
 							if (writer != nullptr) {
@@ -86,6 +86,22 @@ private:
 									if (si_write(*where) || si_fcall(*where)) {
 										// This is an interesting situation, we have to make it look like it happened.
 										state[writer->rhs().num] = {where};
+										++changes;
+									}
+									if (si_read(*where)) {
+										// Attempt to find the source
+										for (const auto& ws_source : data[writer].everything[1]) {
+											if (std::holds_alternative<statement *>(ws_source)) {
+												auto writer_squared = std::get<statement *>(ws_source);
+												writer_squared->for_all_write([&, i3=0](auto &reg2) mutable {
+													int index3 = i3++;
+													if (reg2 == where->rhs()) {
+														++changes;
+														data[writer_squared].parameters[index3].insert(where);
+													}
+												});
+											}
+										}
 									}
 								}
 							}
