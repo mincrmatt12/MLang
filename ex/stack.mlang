@@ -18,10 +18,11 @@ stack_free(64 * stck) = {
 	free(stck);
 }
 
-stack_push(64 * stck, 64 val) = {
+stack_push<64 *>(64 * stck, 64 val) = {
 	++stck[0];
-	realloc(stck, 8 + stck[0] * 8);
+	stck = realloc(stck, 8 + stck[0] * 8);
 	stck[stck[0]] = val;
+	return stck;
 }
 
 stack_pop<64>(64 * stck) = {

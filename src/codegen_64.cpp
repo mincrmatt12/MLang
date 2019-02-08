@@ -78,9 +78,9 @@ namespace x86_64 {
 		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(AnyS), RegMem(AnyS)}},
 		/* IFGT */
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), AnyReg(AnyS)}},
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {RegMem(AnyS), Imm(MDWordS)}},
-		{10, st_type::ifgt, "cmp %0, %1 | ja %l", {AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), AnyReg(AnyS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), Imm(MDWordS)}},
+		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg(AnyS)}},
 		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg(AnyS)}},
@@ -99,8 +99,8 @@ namespace x86_64 {
 		{10, st_type::eq,   "cmp %1, %2 | sete %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::eq,   "cmp %2, %1 | sete %b0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
 		/* GT */
-		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::gt,   "cmp %1, %2 | seta %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
 		/* CAST */
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(DWordS), RegMem({p_size::WORD})}},
@@ -330,6 +330,22 @@ namespace x86_64 {
 		emit("push rbp");
 		emit("mov rbp, rsp");
 		if (local_stack_usage) emit("sub rsp, ", local_stack_usage);
+
+		// Fix arguments to be the right zero-extends
+		for (int argno = 0; argno < cu.num_params; ++argno) {
+			switch (cu.parameter_types[argno].size) {
+				case 32:
+					emit("mov ", storage{argno, 32}, ", ", storage{argno, 32});
+					break;
+				case 16:
+					emit("and ", storage{argno, 64}, ", 0xffff");
+					break;
+				case 8:
+					emit("and ", storage{argno, 64}, ", 0xff");
+				default:
+					break;
+			}
+		}
 
 		bool add_extra_junk = false;
 
@@ -944,13 +960,6 @@ use_mem:
 
 			if (stack_add_amount) emit("sub rsp, ", stack_add_amount);
 
-			// Check if the target has varargs.
-			const auto &call_tgt = *(++s->params.begin());
-			if (ai_ident(call_tgt) && call_tgt.ident.type == id_type::extern_function && ext_list[call_tgt.ident.index].varargs) {
-				// Set al to 0
-				emit("mov al, 0");
-			}
-
 			// Check if we need to use the special method for handling registers
 			std::set<int> used_so_far;
 			bool alright = true;
@@ -992,6 +1001,13 @@ use_mem:
 				}
 			}
 
+			// Check if the target has varargs.
+			const auto &call_tgt = *(++s->params.begin());
+			if (ai_ident(call_tgt) && call_tgt.ident.type == id_type::extern_function && ext_list[call_tgt.ident.index].varargs) {
+				// Set al to 0
+				emit("mov al, 0");
+			}
+
 			// Call function
 			if (ai_ident(call_tgt)) {
 				if (call_tgt.ident.type == id_type::function) {
@@ -1006,10 +1022,25 @@ use_mem:
 other:
 				emit("call ", storage{get_storage_for(call_tgt), 64});
 			}
+			// Xor out low bytes
+			if (ai_ident(call_tgt)) {
+				switch (call_tgt.ident.t.size) {
+					case 32:
+						emit("mov eax, eax");
+						break;
+					case 16:
+						emit("and rax, 0xffff");
+						break;
+					case 8:
+						emit("and rax, 0xff");
+					default:
+						break;
+				}
+			}
 
 			// Grab result
 			if (target.type == storage::REG && target.regno != 6) {
-				emit("mov ", target, ", ", storage{6, target.size});
+				emit("mov ", storage{target, 64}, ", ", storage{6, 64});
 			}
 
 			// Add back the stack

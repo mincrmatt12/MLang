@@ -1,0 +1,21 @@
+#include stack.mlang
+#include stdlib.mlang
+
+main(argc, 8** argv) = {
+	var 64* new_stack = stack_new();
+	puts("Stack! Negative number for pop, positive for push, 0 to end");
+	var 32 value = 1;
+	while (value != 0) {
+		printf("> ");
+		scanf("%d", &value);
+		if (value > 0) {
+			new_stack = stack_push(new_stack, <64>(value));
+			printf("Pushed, height = %d\n", <32>(stack_height(new_stack)));
+		}
+		else if (value < 0) {
+			printf("Popped %d\n", stack_pop(new_stack));
+		}
+	}
+	puts("Goodbye.");
+	stack_free(new_stack);
+}

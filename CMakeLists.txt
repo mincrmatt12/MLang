@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake CACHE INTERNAL "" FORCE)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-
+	add_compile_options(-O3)
 else()
 	add_compile_options(-g)
 endif()
@@ -20,6 +20,9 @@ BISON_TARGET(mlang_yacc ${CMAKE_CURRENT_BINARY_DIR}/parser.y.re ${CMAKE_CURRENT_
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 message(STATUS ${BISON_mlang_yacc_OUTPUTS})
-add_executable(mcc src/args.cpp src/main.cpp src/ast_optimize.cpp
+add_executable(mlc src/args.cpp src/main.cpp src/ast_optimize.cpp
 	           src/compiler.cpp src/tac_optimize.cpp src/preprocess.cpp 
 			   src/codegen_64.cpp ${BISON_mlang_yacc_OUTPUTS})
+
+# Install
+install(TARGETS mlc RUNTIME DESTINATION bin)
