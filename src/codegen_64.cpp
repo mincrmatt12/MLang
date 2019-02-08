@@ -1040,7 +1040,7 @@ other:
 
 			// Grab result
 			if (target.type == storage::REG && target.regno != 6) {
-				emit("mov ", target, ", ", storage{6, target.size});
+				emit("mov ", storage{target, 64}, ", ", storage{6, 64});
 			}
 
 			// Add back the stack
