@@ -1,5 +1,7 @@
-test() = {
-	var l = 3;
-	while (l-- > 0) {;}
-	return 0;
+test(8 g) = {
+	while (g < 25) {
+		if (g == 13) g = 27;
+		else {++g;}
+	}
+	return 5;
 }

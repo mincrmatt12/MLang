@@ -32,3 +32,4 @@ stack_pop<64>(64 * stck) = {
 
 stack_height<64>(64 * stck) = return stck[0];
 
+stack_top<64>(64 * stck) = return stck[stck[0]];
