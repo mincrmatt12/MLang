@@ -1022,6 +1022,21 @@ use_mem:
 other:
 				emit("call ", storage{get_storage_for(call_tgt), 64});
 			}
+			// Xor out low bytes
+			if (ai_ident(call_tgt)) {
+				switch (call_tgt.ident.t.size) {
+					case 32:
+						emit("mov eax, eax");
+						break;
+					case 16:
+						emit("and rax, 0xffff");
+						break;
+					case 8:
+						emit("and rax, 0xff");
+					default:
+						break;
+				}
+			}
 
 			// Grab result
 			if (target.type == storage::REG && target.regno != 6) {
