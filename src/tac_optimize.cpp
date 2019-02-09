@@ -129,13 +129,57 @@ int  tacoptimizecontext::optimize_deduplicate() {
 	return modifications;
 }
 
-static int size_of_rtype(const ex_rtype &r) {
+inline constexpr int size_of_rtype(const ex_rtype &r) {
 	return r.ptr == nullptr ? r.size : 64;
 }
 
-static bool reachable(statement * start, statement * end) {
-	auto t = traverse_v(start);
-	return std::find(t.begin(), t.end(), end) != t.end();
+int reachable_v(statement * start, statement * end, bool in_all_cases, std::unordered_set<statement *>& seen, int steps=0) {
+	std::queue<statement *> to_read;
+	to_read.push(start);
+
+	while (!to_read.empty()) {
+		auto v = to_read.front();
+		to_read.pop();
+		if (v == end) return steps;
+		if (seen.count(v) != 0) {continue;}
+		seen.insert(v);
+		++steps;
+		
+		if (v->next && v->cond) {
+			if (in_all_cases) {
+				int s1 = reachable_v(v->next, end, true, seen, steps), s2 = reachable_v(v->cond, end, true, seen, steps);
+				if (s1 && s2) return std::max(s1, s2);
+				return 0;
+			}
+			to_read.push(v->next);
+			to_read.push(v->cond);
+		}
+		else if (v->next) {
+			to_read.push(v->next);
+		}
+		else if (v->cond) {
+			to_read.push(v->cond);
+		}
+	}
+
+	return 0;
+}
+
+bool reachable_directly(statement * start, statement * end) {
+	std::unordered_set<statement *> seen;
+	while (start != end) {
+		if (seen.count(start)) return false;
+		seen.insert(start);
+		if (start->next == nullptr) return false;
+		start = start->next;
+	}
+
+	return true;
+}
+
+int reachable(statement * start, statement * end, bool in_all_cases=false) {
+	std::unordered_set<statement *> v;
+	return reachable_v(start, end, in_all_cases, v);
 }
 
 int  tacoptimizecontext::optimize_copyelision() {
@@ -820,7 +864,10 @@ int tacoptimizecontext::optimize_rename() {
 									auto &dd = info.data[*std::get_if<statement *>(&c_source)].parameters[0];
 									return std::all_of(dd.begin(), dd.end(), [&](auto reader){
 											return std::all_of(checkable.begin(), checkable.end(), [&](auto &beginning){
-													return !si_addrof(**std::get_if<statement *>(&reader)) && !reachable(beginning, *std::get_if<statement *>(&reader));
+													const auto stmt_read = *std::get_if<statement *>(&reader);
+													if (si_addrof(*stmt_read)) return false;
+													if (!reachable(beginning, stmt_read)) return true;
+													return false;
 											});
 									});
 								}
