@@ -2,6 +2,7 @@
 #include token.mlang
 
 main(argc, 8** argv) = {
+	if (argc > 1) debug = true;
 	puts("Infix calculator, supported +-/*%. Enter an expression:");
 	var 8* in_str = malloc(64);
 	var 8 length = 0;
@@ -13,10 +14,10 @@ main(argc, 8** argv) = {
 		}
 		else {
 			in_str[length++] = c;
-			printf("GOT: %c, %d\n", c, <64>(length));
+			if (debug) printf("GOT: %c, %d\n", c, <64>(length));
 		}
 	}
 	var 64 result = evaluate(in_str);
-	printf("%d", result);
+	printf("= %d\n", result);
 	return 0;
 }
