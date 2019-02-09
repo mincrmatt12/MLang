@@ -13,6 +13,7 @@ main(argc, 8** argv) = {
 		}
 		else {
 			in_str[length++] = c;
+			printf("GOT: %c, %d\n", c, <64>(length));
 		}
 	}
 	var 64 result = evaluate(in_str);

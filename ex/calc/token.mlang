@@ -56,10 +56,12 @@ is_operator(8 char) = {
 }
 
 parse_expression<64>(64 lhs, 8 min_prec) = {
-	printf("parse_expr %d, %d\n", lhs, min_prec);
+	printf("parse_expr %d, %d\n", lhs, <64>(min_prec));
 	advance_spaces();
 	if (peek_character() == 0) return lhs;
 	var 8 lookahead = peek_character();
+	printf("LHEAD = %c", lookahead);
+	printf("PREC = %d", get_prec(lookahead));
 	while (is_operator(lookahead) && (get_prec(lookahead) >= min_prec)) {
 		var 8 op = lookahead;
 		printf("OP = %c, ", op);
@@ -68,7 +70,7 @@ parse_expression<64>(64 lhs, 8 min_prec) = {
 		printf("RHS = %d, ", rhs);
 		advance_spaces();
 		lookahead = peek_character();
-		printf("LOOKAHEAD = %d, ", lookahead);
+		printf("LOOKAHEAD = %c, ", lookahead);
 		printf("IS_OPERATOR = %d\n", is_operator(lookahead));
 		while (is_operator(lookahead) && (get_prec(lookahead) > get_prec(op))) {
 			printf("parse_expr il %c\n", lookahead);
