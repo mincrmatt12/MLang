@@ -994,10 +994,10 @@ use_mem:
 			else {
 				// Use the stack to cheat complex logic.
 				for (int i = 2; i < s->params.size(); ++i) {
-					emit("push ", storage{get_storage_for(s->params[i]), std::max((uint8_t)16, get_storage_for(s->params[i]).size)});
+					emit("push ", storage{get_storage_for(s->params[i]), 64});
 				}
 				for (int i = 0, j = s->params.size() - 1; j >= 2; --j, ++i) {
-					emit("pop ", storage{static_cast<int>((s->params.size() - 3) - i), std::max((uint8_t)16, get_storage_for(s->params[j]).size)});
+					emit("pop ", storage{static_cast<int>((s->params.size() - 3) - i), 64});
 				}
 			}
 
