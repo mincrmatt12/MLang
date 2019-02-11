@@ -165,18 +165,6 @@ int reachable_v(statement * start, statement * end, bool in_all_cases, std::unor
 	return 0;
 }
 
-bool reachable_directly(statement * start, statement * end) {
-	std::unordered_set<statement *> seen;
-	while (start != end) {
-		if (seen.count(start)) return false;
-		seen.insert(start);
-		if (start->next == nullptr) return false;
-		start = start->next;
-	}
-
-	return true;
-}
-
 int reachable(statement * start, statement * end, bool in_all_cases=false) {
 	std::unordered_set<statement *> v;
 	return reachable_v(start, end, in_all_cases, v);
@@ -867,7 +855,9 @@ int tacoptimizecontext::optimize_rename() {
 													const auto stmt_read = *std::get_if<statement *>(&reader);
 													if (si_addrof(*stmt_read)) return false;
 													if (!reachable(beginning, stmt_read)) return true;
-													return false;
+
+													int i;
+													return ((i = reachable(beginning, *std::get_if<statement *>(&c_source), true)) != 0) ? i < reachable(beginning, stmt_read, true) : false;
 											});
 									});
 								}
