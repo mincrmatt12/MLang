@@ -49,11 +49,12 @@ parse_number<64>() = {
 
 get_prec<8>(8 operator) = {
 	if (operator == '+' || operator == '-') return 0;
-	else return 1;
+	if (operator == '/' || operator == '*' || operator == '%') return 1;
+	else return 2;
 }
 
-is_operator(8 char) = {
-	return char == '+' || char == '-' || char == '*' || char == '/' || char == '%';
+is_operator<8>(8 char) = {
+	return char == '+' || char == '-' || char == '*' || char == '/' || char == '%' || char == '^';
 }
 
 parse_expression<64>(64 lhs, 8 min_prec) = {
@@ -63,6 +64,7 @@ parse_expression<64>(64 lhs, 8 min_prec) = {
 	var 8 lookahead = peek_character();
 	if (debug) printf("LHEAD = %c", lookahead);
 	if (debug) printf("PREC = %d", get_prec(lookahead));
+	if (debug) printf("IS_OPERATOR = %d\n", is_operator(lookahead));
 	while (is_operator(lookahead) && (get_prec(lookahead) >= min_prec)) {
 		var 8 op = lookahead;
 		if (debug) printf("OP = %c, ", op);
@@ -84,6 +86,14 @@ parse_expression<64>(64 lhs, 8 min_prec) = {
 		else if (op == '*') lhs = lhs * rhs;
 		else if (op == '/') lhs = lhs / rhs;
 		else if (op == '%') lhs = lhs % rhs;
+		else if (op == '^') {
+			var 8 i = 0;
+			var 64 lhs_orig = lhs;
+			while (i < rhs) {
+				lhs = lhs * lhs_orig;
+				++i;
+			}
+		}
 	}
 	return lhs;
 }
