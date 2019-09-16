@@ -113,6 +113,7 @@ int  tacoptimizecontext::optimize_deduplicate() {
 	//
 	// I don't care though.
 	for (auto &s : traverse_v(optimizing->start)) {
+		if (si_ret(*s)) continue; // don't change returns since it usually makes more sense to leave them alone
 		// check if s is equal to something in used
 		if (auto i = std::find_if(used.begin(), used.end(), [&](auto &a){return *a == *s;}); i != used.end()) {
 			// the statement is already used in exactly the same form. convert s into a nop and set its next to the deduplicated
