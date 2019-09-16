@@ -139,6 +139,7 @@ namespace x86_64 {
 		bool is_register_used(int regno);
 		int  get_clobber_register(std::set<int> important_registers);
 		bool is_clobber_available();
+		bool is_clobbered_for(int reg, statement* stmt);
 	};
 }
 

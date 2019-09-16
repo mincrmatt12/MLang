@@ -508,7 +508,49 @@ namespace x86_64 {
 		}
 	}
 
-	
+	bool codegenerator::is_clobbered_for(int reg, statement* stmt) {
+		// A register should be preserved at a point if:
+		// 	- it is read at a point after this statement
+		// 	- it is written before this statement
+		
+		access_info flow(*current, false, false);
+		
+		if (!flow.data.count(stmt)) return true;
+		auto data_at_stmt = flow.data[stmt].everything;
+
+		// Get all sources, checking where they are written
+		int i = 0;
+		if (std::all_of(data_at_stmt.begin(), data_at_stmt.end(), [&](const auto &i_info){
+			bool result = std::all_of(i_info.begin(), i_info.end(), [&](const source_type& info){
+				if (std::holds_alternative<parameter_source>(info)) return false;
+				if (std::holds_alternative<undefined_source>(info)) return true; // we don't care about undefined sources
+
+				// If the register at this point isn't stored in the register we care about, return true
+				if (get_storage_for(addr_ref{ar_type::reg, i}).type != storage::REG || get_storage_for({ar_type::reg, i}).regno != reg) return true;
+
+				// Otherwise, check where this was written from.
+				// Check if we can reach where it is read from _and_ where it is written from can reach us.
+				auto source_of_us = std::get<statement *>(info);
+				std::set<source_type> potential_readers;
+
+				source_of_us->for_all_write([&, k=0](const addr_ref &j) mutable {
+					if (ai_reg(j) && j.num == i) {
+						potential_readers = flow.data[source_of_us].parameters[k];
+					}
+					++k;
+				});
+
+				if (potential_readers.size() == 0) return true;
+
+				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&stmt](const source_type &st){return reachable(stmt, std::get<statement *>(st));}))
+					return false;
+			});
+			++i;
+			return result;
+		})) return false;
+
+		return true;
+	}
 
 	std::string codegenerator::assemble(statement* stmt, int labelno) {
 		if (si_fcall(*stmt) || si_ret(*stmt)) return assemble_special(stmt, labelno);
@@ -517,7 +559,7 @@ namespace x86_64 {
 		//  - compiling a cast
 		//  - where both rt sizes are the same
 		// If so:
-		//  - reinit the statement hastily as a mov
+		//  - reinit the statement as a mov
 		if (si_cast(*stmt) && stmt->lhs().rt.size == stmt->rhs().rt.size) {
 			// Reinit
 			stmt->t = st_type::mov;
@@ -812,8 +854,12 @@ use_mem:
 		for (const auto &k : clobbers) {
 			if (ignored_registers.count(k)) continue; // ignore write params, as to not ruin the handiwork of the write solver
 			// Fix the clobbering
-			pre_command = "push " + storage{k, 64}.to_string() + '\n' + pre_command;
-			post_command += "pop " + storage{k, 64}.to_string() + '\n';
+			// Determine which registers need to be clobber-protected
+			
+			if (is_clobbered_for(k, stmt)) {
+				pre_command = "push " + storage{k, 64}.to_string() + '\n' + pre_command;
+				post_command += "pop " + storage{k, 64}.to_string() + '\n';
+			}
 		}
 
 		// Now, begin emitting stuff
@@ -949,6 +995,7 @@ use_mem:
 
 				if (target.type == storage::REG && target.regno == i) continue; // ignore the result variable
 				if (!is_register_used(i)) continue;
+				if (!is_clobbered_for(i, s)) continue;
 
 				emit("push ", storage{i, 64});
 				added_junk = !added_junk;
@@ -1005,7 +1052,7 @@ use_mem:
 			const auto &call_tgt = *(++s->params.begin());
 			if (ai_ident(call_tgt) && call_tgt.ident.type == id_type::extern_function && ext_list[call_tgt.ident.index].varargs) {
 				// Set al to 0
-				emit("mov al, 0");
+				emit("xor eax, eax");
 			}
 
 			// Call function
@@ -1052,6 +1099,7 @@ other:
 
 				if (target.type == storage::REG && target.regno == i) continue; // ignore the result variable
 				if (!is_register_used(i)) continue;
+				if (!is_clobbered_for(i, s)) continue;
 
 				emit("pop ", storage{i, 64});
 			}
