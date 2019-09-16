@@ -147,4 +147,6 @@ public:
 	}
 };
 
+int reachable(statement * start, statement * end, bool in_all_cases=false);
+
 #endif //FLOW_H
