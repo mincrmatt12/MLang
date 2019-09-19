@@ -74,16 +74,15 @@ namespace x86_64 {
 		{11, st_type::neg,  "imul %0, %1, -1", {AnyReg(AnyS), RegMem(AnyS)}},
 		/* IFNZ */
 		{10, st_type::ifnz, "cmp %0, 0 | jne %l", {RegMem(AnyS)}},
-		{ 5, st_type::ifnz, "jmp %l", 			  {Imm(AnyS)}},
+		{ 5, st_type::ifnz, "jmp %l",            {Const(1)}},
+		{ 5, st_type::ifnz, "nop",               {Const(0)}},
 		/* IFEQ */
 		{10, st_type::ifeq, "cmp %0, %1 | je %l", {RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::ifeq, "cmp %1, %0 | je %l", {RegImm(AnyS), RegMem(AnyS)}},
-		{ 5, st_type::ifeq, "jmp %l", 			  {Imm(AnyS)}},
 		/* IFGT */
 		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), AnyReg(AnyS)}},
 		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {RegMem(AnyS), Imm(MDWordS)}},
 		{10, st_type::ifgt, "cmp %0, %1 | jg %l", {AnyReg(AnyS), RegMem(AnyS)}},
-		{ 5, st_type::ifgt, "jmp %l", 			  {Imm(AnyS)}},
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg(AnyS)}},
 		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg(AnyS)}},
