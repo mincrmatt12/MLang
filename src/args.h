@@ -28,7 +28,7 @@ o(0, 1, 1, copy_elide_read, 7) \
 o(0, 0, 1, copy_elide_write, 8) \
 o(0, 1, 1, simplify_useless_casts, 9) \
 o(0, 1, 1, replace_literal_params, 10) \
-o(0, 0, 1, replace_ifnz_literals, 11) \
+o(1, 1, 1, replace_ifnz_literals, 11) \
 o(1, 1, 1, jumpthread, 12) \
 o(0, 1, 1, literal_jump_hardcode, 13) \
 o(1, 1, 1, remove_redundant_ifnz, 14) \
