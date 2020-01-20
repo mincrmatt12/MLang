@@ -23,7 +23,7 @@
 #include <tuple>
 #include "tac.h"
 #include "tac_optimize.h"
-#include "flow.h"
+#include "execorder.h"
 
 namespace x86_64 {
 	enum struct p_size {
@@ -113,7 +113,7 @@ namespace x86_64 {
 		// Current compilation unit.
 		compilation_unit *current;
 		// Current compilation unit access info
-		access_info *current_ai = nullptr;
+		execution_order *current_eo = nullptr;
 
 		// Current register allocation
 		std::vector<storage> stores;

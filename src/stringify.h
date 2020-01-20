@@ -14,6 +14,7 @@
 #include "tac_optimize.h"
 #include "args.h"
 #include "codegen.h"
+#include "execorder.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -193,6 +194,38 @@ static void val_print(const statement &s) {
 	for (auto &p : s.params) {
 		std::cout << " ";
 		val_print(p);
+	}
+}
+
+template<typename ExecOrder>
+static void val_print(const execution_path_impl<ExecOrder> &eo) {
+	int i = 0;
+	for (const path_entry_type& entry : eo) {
+		if (std::holds_alternative<statement_path_entry>(entry)) {
+			val_print(*std::get<statement_path_entry>(entry));
+		}
+		else {
+			std::cout << "L." << std::get<loop_path_entry>(entry) << "(";
+			val_print(*eo.statement_at(i));
+			std::cout << ")";
+		}
+
+		++i;
+		std::cout << "\n|\n";
+	}
+	std::cout << "_\n";
+}
+
+static void val_print(const execution_order &eo) {
+	for (const auto &[k, v] : eo.data) {
+		std::cout << "== paths that reach ";
+		val_print(*k);
+		std::cout << " ==\n";
+
+		for (const auto& i : v) {
+			val_print(i);
+			std::cout << "\n";
+		}
 	}
 }
 

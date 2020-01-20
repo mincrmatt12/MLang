@@ -1,5 +1,6 @@
 #include "codegen.h"
 #include "stringify.h"
+#include "flow.h"
 
 namespace x86_64 {
 	const char * registers[4][14] = {
@@ -320,8 +321,8 @@ namespace x86_64 {
 
 	std::string codegenerator::generate_unit(compilation_unit &cu) {
 		current = &cu;
-		if (current_ai != nullptr) delete current_ai;
-		current_ai = nullptr;
+		if (current_eo != nullptr) delete current_eo;
+		current_eo = nullptr;
 		std::string result{};
 
 		auto emit = emitter(result);
@@ -515,45 +516,13 @@ namespace x86_64 {
 		// A register should be preserved at a point if:
 		// 	- it is read at a point after this statement
 		// 	- it is written before this statement
-		if (!do_prune_clobbers()) return true;
+		//if (!do_prune_clobbers()) return true;
 
-		if (!current_ai) {
-			current_ai = new access_info(*current, false, false);
+		if (!current_eo) {
+			print_statement_list(current->start);
+			current_eo = new execution_order(current->start);
+			val_print(*current_eo);
 		}
-		
-		if (!current_ai->data.count(stmt)) return true;
-		auto data_at_stmt = current_ai->data[stmt].everything;
-
-		// Get all sources, checking where they are written
-		int i = 0;
-		if (std::all_of(data_at_stmt.begin(), data_at_stmt.end(), [&](const auto &i_info){
-			bool result = std::all_of(i_info.begin(), i_info.end(), [&](const source_type& info){
-				if (std::holds_alternative<parameter_source>(info)) return false;
-				if (std::holds_alternative<undefined_source>(info)) return true; // we don't care about undefined sources
-
-				// If the register at this point isn't stored in the register we care about, return true
-				if (get_storage_for(addr_ref{ar_type::reg, i}).type != storage::REG || get_storage_for({ar_type::reg, i}).regno != reg) return true;
-
-				// Otherwise, check where this was written from.
-				// Check if we can reach where it is read from _and_ where it is written from can reach us.
-				auto source_of_us = std::get<statement *>(info);
-				std::set<source_type> potential_readers;
-
-				source_of_us->for_all_write([&, k=0](const addr_ref &j) mutable {
-					if (ai_reg(j) && j.num == i) {
-						potential_readers = current_ai->data[source_of_us].parameters[k];
-					}
-					++k;
-				});
-
-				if (potential_readers.size() == 0) return true;
-
-				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&stmt](const source_type &st){return reachable(stmt, std::get<statement *>(st));}))
-					return false;
-			});
-			++i;
-			return result;
-		})) return false;
 
 		return true;
 	}
