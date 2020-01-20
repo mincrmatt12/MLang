@@ -1,5 +1,4 @@
 #include "codegen.h"
-#include "flow.h"
 #include "stringify.h"
 
 namespace x86_64 {
@@ -321,6 +320,8 @@ namespace x86_64 {
 
 	std::string codegenerator::generate_unit(compilation_unit &cu) {
 		current = &cu;
+		if (current_ai != nullptr) delete current_ai;
+		current_ai = nullptr;
 		std::string result{};
 
 		auto emit = emitter(result);
@@ -514,11 +515,14 @@ namespace x86_64 {
 		// A register should be preserved at a point if:
 		// 	- it is read at a point after this statement
 		// 	- it is written before this statement
+		if (!do_prune_clobbers()) return true;
+
+		if (!current_ai) {
+			current_ai = new access_info(*current, false, false);
+		}
 		
-		access_info flow(*current, false, false);
-		
-		if (!flow.data.count(stmt)) return true;
-		auto data_at_stmt = flow.data[stmt].everything;
+		if (!current_ai->data.count(stmt)) return true;
+		auto data_at_stmt = current_ai->data[stmt].everything;
 
 		// Get all sources, checking where they are written
 		int i = 0;
@@ -537,7 +541,7 @@ namespace x86_64 {
 
 				source_of_us->for_all_write([&, k=0](const addr_ref &j) mutable {
 					if (ai_reg(j) && j.num == i) {
-						potential_readers = flow.data[source_of_us].parameters[k];
+						potential_readers = current_ai->data[source_of_us].parameters[k];
 					}
 					++k;
 				});
