@@ -818,7 +818,8 @@ int tacoptimizecontext::optimize_rename() {
 											return std::all_of(checkable.begin(), checkable.end(), [&](auto &beginning){
 													const auto stmt_read = *std::get_if<statement *>(&reader);
 													if (si_addrof(*stmt_read)) return false;
-													if (!reachable(beginning, stmt_read)) return true;
+													// Can we get to the source before we get to the reader starting at where we want to clobber this register?
+													if (reachable_before(beginning, std::get<statement *>(c_source), stmt_read)) return true;
 													return false;
 											});
 									});
