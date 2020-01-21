@@ -749,7 +749,7 @@ namespace x86_64 {
 							int newregno = get_clobber_register(used_registers);
 
 							storage new_register{newregno, stores[i].size};
-							added_commands[possible] = "mov ", new_register.to_string() + ", " + stores[i].to_string() + "\n" + added_commands[possible] ;
+							added_commands[possible] = "mov " + new_register.to_string() + ", " + stores[i].to_string() + "\n" + added_commands[possible];
 							added_registers[possible].insert(newregno);
 
 							chosen_stores[possible][i] = std::move(new_register);
