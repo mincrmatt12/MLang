@@ -148,5 +148,6 @@ public:
 };
 
 int reachable(statement * start, statement * end, bool in_all_cases=false);
+bool reachable_before(statement * start, statement * middle, statement * end);
 
 #endif //FLOW_H
