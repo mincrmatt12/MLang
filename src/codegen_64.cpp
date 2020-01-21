@@ -1095,6 +1095,9 @@ other:
 			if (target.type == storage::REG && target.regno != 6) {
 				emit("mov ", storage{target, 64}, ", ", storage{6, 64});
 			}
+			else if (target.type == storage::STACKOFFSET) {
+				emit("mov ", target, ", ", storage{6, target.size});
+			}
 
 			// Add back the stack
 			if (stack_add_amount) emit("add rsp, ", stack_add_amount);
