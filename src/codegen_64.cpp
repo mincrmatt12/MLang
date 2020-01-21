@@ -1053,12 +1053,22 @@ use_mem:
 				}
 			}
 			else {
-				// Use the stack to cheat complex logic.
-				for (int i = 2; i < s->params.size(); ++i) {
-					emit("push ", storage{get_storage_for(s->params[i]), 64});
+				// Check if we can use xchg
+				if (s->params.size() == 2 && 
+						std::all_of(s->params.begin(), s->params.end(), [&](const auto& s){return get_storage_for(s).type == storage::REG;}) &&
+						get_storage_for(s->params[0]).regno == 1 &&
+						get_storage_for(s->params[1]).regno == 0
+				) {
+					emit("xchg rdi, rsi");
 				}
-				for (int i = 0, j = s->params.size() - 1; j >= 2; --j, ++i) {
-					emit("pop ", storage{static_cast<int>((s->params.size() - 3) - i), 64});
+				else {
+					// Use the stack to cheat complex logic.
+					for (int i = 2; i < s->params.size(); ++i) {
+						emit("push ", storage{get_storage_for(s->params[i]), 64});
+					}
+					for (int i = 0, j = s->params.size() - 1; j >= 2; --j, ++i) {
+						emit("pop ", storage{static_cast<int>((s->params.size() - 3) - i), 64});
+					}
 				}
 			}
 
