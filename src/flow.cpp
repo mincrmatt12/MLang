@@ -36,3 +36,10 @@ int reachable(statement * start, statement * end, bool in_all_cases) {
 	std::unordered_set<statement *> v;
 	return reachable_v(start, end, in_all_cases, v);
 }
+
+// reachable before
+// takes more memory and logic
+
+bool reachable_before(statement * start, statement * before, statement * after) {
+	
+}
