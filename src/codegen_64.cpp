@@ -1076,7 +1076,7 @@ other:
 				emit("call ", storage{get_storage_for(call_tgt), 64});
 			}
 			// Xor out low bytes
-			if (ai_ident(call_tgt)) {
+			if (ai_ident(call_tgt) && (target.type == storage::REG || (target.type == storage::STACKOFFSET && target.size != call_tgt.ident.t.size))) {
 				switch (call_tgt.ident.t.size) {
 					case 32:
 						emit("mov eax, eax");
