@@ -521,18 +521,18 @@ namespace x86_64 {
 			current_ai = new access_info(*current, false, false);
 		}
 		
-		if (!current_ai->data.count(stmt)) return true;
+		if (!current_ai->data.count(stmt)) return false;
 		auto data_at_stmt = current_ai->data[stmt].everything;
 
 		// Get all sources, checking where they are written
 		int i = 0;
 		if (std::all_of(data_at_stmt.begin(), data_at_stmt.end(), [&](const auto &i_info){
 			bool result = std::all_of(i_info.begin(), i_info.end(), [&](const source_type& info){
-				if (std::holds_alternative<parameter_source>(info)) return false;
 				if (std::holds_alternative<undefined_source>(info)) return true; // we don't care about undefined sources
 
 				// If the register at this point isn't stored in the register we care about, return true
 				if (get_storage_for(addr_ref{ar_type::reg, i}).type != storage::REG || get_storage_for({ar_type::reg, i}).regno != reg) return true;
+				if (std::holds_alternative<parameter_source>(info)) return false; // Ok, this is the correct register _and_ it's a parameter, we can't get rid of it
 
 				// Otherwise, check where this was written from.
 				// Check if we can reach where it is read from _and_ where it is written from can reach us.
@@ -548,8 +548,16 @@ namespace x86_64 {
 
 				if (potential_readers.size() == 0) return true;
 
-				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&stmt](const source_type &st){return reachable(stmt, std::get<statement *>(st));}))
+				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&](const source_type &st){
+						if (!reachable_before(stmt, source_of_us, std::get<statement *>(st)) ){
+							return true;
+						}
+						return false;
+				}))
 					return false;
+				else {
+					return true;
+				}
 			});
 			++i;
 			return result;
