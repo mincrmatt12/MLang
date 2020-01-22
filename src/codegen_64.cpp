@@ -1013,7 +1013,20 @@ use_mem:
 				if (!is_register_used(i)) continue;
 				if (!is_clobbered_for(i, s)) continue;
 
+				// Bodge to tell the stack remover to ignore this:
+				if (std::any_of(s->params.begin() + 1, s->params.end(), [&](const auto &j){
+					try {
+						return storage{get_storage_for(j), 64} == storage{i, 64};
+					}
+					catch (const std::runtime_error &e) {
+						return false;
+					}
+				})) {
+					emit("; param");
+				}
+
 				emit("push ", storage{i, 64});
+
 				added_junk = !added_junk;
 			}
 
