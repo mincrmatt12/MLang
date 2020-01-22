@@ -26,6 +26,9 @@
 #include "flow.h"
 
 namespace x86_64 {
+	// Utility function to postprocess generated assembler
+	std::string remove_useless_stack_ops(const std::string &original);
+
 	enum struct p_size {
 		BYTE,
 		WORD,

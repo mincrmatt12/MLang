@@ -1,5 +1,6 @@
 #include "codegen.h"
 #include "stringify.h"
+#include <regex>
 
 namespace x86_64 {
 	const char * registers[4][14] = {
@@ -437,7 +438,8 @@ namespace x86_64 {
 			}
 		}
 
-		return result;
+		// Simplify stack operations
+		return remove_useless_stack_ops(result);
 	}
 	
 	// allocate_stores
@@ -1185,6 +1187,20 @@ other:
 				emit(k, ": resb ", v / 8);
 			}
 		}
+
+		return result;
+	}
+
+	std::string remove_useless_stack_ops(const std::string &original) {
+		std::string result = original;
+		auto reduce_via_regex = [&](std::regex replacer){
+			std::string result_old = result;
+			while ((result = std::regex_replace(result_old, replacer, "")) != result_old)
+				result_old = result;
+		};
+		
+		reduce_via_regex(std::regex(R"(pop r(\w\w)\npop r(\w\w)\npush r\2\npush r\1\n)"));
+		reduce_via_regex(std::regex(R"(sub rsp, (\d+)\nadd rsp, \1\n")"));
 
 		return result;
 	}
