@@ -86,8 +86,8 @@ namespace x86_64 {
 		/* READ */
 		{10, st_type::read, "movzx %q0, byte [%1]", {AnyReg({p_size::BYTE}), AnyReg(AnyS)}},
 		{10, st_type::read, "movzx %q0, word [%1]", {AnyReg({p_size::WORD}), AnyReg(AnyS)}},
-		{11, st_type::read, "xor %q0, %q0 | mov %0, dword [%1]", {AnyReg({p_size::DWORD}), AnyReg(AnyS)}},
-		{11, st_type::read, "xor %q0, %q0 | mov %0, qword [%1]", {AnyReg({p_size::QWORD}), AnyReg(AnyS)}},
+		{11, st_type::read, "mov %0, dword [%1] | mov %0, %0", {AnyReg({p_size::DWORD}), AnyReg(AnyS)}},
+		{11, st_type::read, "mov %0, qword [%1]", {AnyReg({p_size::QWORD}), AnyReg(AnyS)}},
 		/* WRITE */
 		{10, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), AnyReg({p_size::BYTE})}},
 		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), AnyReg({p_size::WORD})}},
