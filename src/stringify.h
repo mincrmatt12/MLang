@@ -253,7 +253,11 @@ static void debug_dump_ctx(compiler &ctx) {
 	for (auto &[name, stp] : ctx.func_compileunits) {
 		if (stp.start == nullptr) continue;
 		std::cout << name << ":" << std::endl;
+		if (stp.array_block_size) {
+			std::cout << "  ; array size = " << stp.array_block_size << std::endl;
+		}
 		print_statement_list(stp.start);
+		
 	}
 
 	std::cout << "$GLOBAL:" << std::endl;
@@ -267,6 +271,9 @@ static void debug_dump_ctx(tacoptimizecontext &ctx) {
 	for (auto &[name, stp] : ctx.func_compileunits) {
 		if (stp.start == nullptr) continue;
 		std::cout << name << ":" << std::endl;
+		if (stp.array_block_size) {
+			std::cout << "  ; array size = " << stp.array_block_size << std::endl;
+		}
 		print_statement_list(stp.start);
 	}
 

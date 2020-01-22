@@ -121,7 +121,8 @@ std::string interpret_literal(std::string &&m);
 	o(assign)					/* assign 0 to 1 */ \
 	o(comma)					/* sequence, internal use */ \
 	o(ret)						/* return p0 */ \
-	o(cast)						/* cast up or down types */
+	o(cast)						/* cast up or down types */ \
+	o(makearray) 				/* allocate an array (or block of memory) onto the stack (or globally) */
 
 #define o(n) n,
 enum class ex_type {ENUM_EXPRESSIONS(o)};
@@ -140,6 +141,9 @@ struct expression {
 
 	template<typename... T>
 	expression(ex_type pt, T&&... args) : t(pt), params{std::forward<T>(args)...} {} // expand it out for varargs
+
+	template<typename... T>
+	expression(ex_type pt, ex_rtype rt, T&&... args) : t(pt), castvalue(rt), params{std::forward<T>(args)...} {} // expand it out for varargs
 
 	expression()			: t(ex_type::nop) {}
 	expression(const identifier &i) : t(ex_type::ident), ident(i) {}
@@ -211,11 +215,26 @@ static void ensure_cast(expression &tgt, const expression &other, bool allow_dow
 	return;
 }
 
+static long get_array_size_for(const ex_rtype &element, long int size) {
+	switch (element.size) {
+		case 8:
+		default:
+			return size;
+		case 16:
+			return size * 2;
+		case 32:
+			return size * 4;
+		case 64:
+			return size * 8;
+	}
+}
+
 struct function {
 	std::string name;
 	expression code;
 	unsigned int num_vars = 0; unsigned int num_args = 0;
 	std::vector<ex_rtype> vtypes{};
+	std::map<int, size_t> varrlengths{};
 };
 
 struct ext_function {
@@ -230,6 +249,7 @@ struct var_decl_shim {
 	std::string name;
 	expression v;
 	ex_rtype t;
+	long int array_size;
 };
 }
 
@@ -246,6 +266,7 @@ struct parsecontext
 	std::map<std::string, identifier> global_ids; // should only ever contain global vars allocated at program scope & external funcs, and functions. temporaries allocated here should be handled in the global init stuff
 	std::vector<expression> global_initializers; // defaults to literal 0; used to generate global init code
 	std::vector<ex_rtype> globvtypes{};
+	std::map<int, size_t> globarrlengths{};
 
 	std::vector<function> func_list;
 	std::vector<ext_function> ext_list;
@@ -274,7 +295,8 @@ public:
 
 	inline bool parsing_function() const {return scopes.size() != 0;}
 
-	expression defvar(const std::string& name, ex_rtype t) {if (!parsing_function()) global_initializers.emplace_back(0l); 
+	expression defvar(const std::string& name, ex_rtype t) {
+		if (!parsing_function()) global_initializers.emplace_back(0l); 
 		if (parsing_function()) {
 			current_fun.vtypes.emplace_back(t);
 		}	
@@ -283,7 +305,10 @@ public:
 		}
 		return define(name, identifier{parsing_function() ? id_type::local_var : id_type::global_var, parsing_function() ? current_fun.num_vars++ : num_globals++, name, std::move(t)});
 	}
-	expression defglobvar(const std::string& name, ex_rtype t)	{(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); return define(name, identifier{id_type::global_var,       num_globals++, name, std::move(t)});}
+	expression defglobvar(const std::string& name, ex_rtype t)	{
+		(parsing_function() ? current_fun.vtypes : globvtypes).emplace_back(t); 
+		return define(name, identifier{id_type::global_var,       num_globals++, name, std::move(t)});
+	}
 	expression defun(const std::string& name)	{return define(name, identifier{id_type::function,         func_list.size(), name}); current_fun = {};}
 	expression defun(const std::string& name, ex_rtype t)	{return define(name, identifier{id_type::function, func_list.size(), name, t}); current_fun = {};}
 	expression deforward(const std::string& name) {
@@ -362,8 +387,6 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 #define M(x) std::move(x)
 #define C(x) expression(x)
 
-
-
 } // end %code
 
 %token END 0
@@ -413,8 +436,9 @@ paramdecls: paramdecl
 paramdecl: paramdecl ',' typespec IDENTIFIER {ctx.defparm($4, $3);}
 	 | typespec IDENTIFIER {ctx.defparm($2, $1);};
 
-var_decl: typespec IDENTIFIER '=' expr		{ $$ = {M($2), M($4), M($1)};}
-	| typespec IDENTIFIER			{ $$ = {M($2), 0l, M($1)};};
+var_decl: typespec IDENTIFIER '=' expr		{ $$ = {M($2), M($4), M($1), 0};}
+	| typespec IDENTIFIER	         	        	{ $$ = {M($2), 0l, M($1), 0};}
+	| typespec '[' INT_LITERAL ']' IDENTIFIER   	  { $$ = {M($5), 0l, M($1), M($3)}; };
 
 typespec: INT_LITERAL			{ if (!($1 == 8 || $1 == 16 || $1 == 32 || $1 == 64)) throw yy::mlang_parser::syntax_error(ctx.loc, "Invalid size"); $$ = ex_rtype($1, false);}
 	| typespec '*'			{ $$ = ex_rtype($1, true);}
@@ -429,10 +453,26 @@ stmt: comp_stmt '}'			{ $$ = M($1); --ctx;}
     | expr ';'				{ $$ = M($1);}
     | ';'				{ $$ = e_nop();};
 
-var_def: "static" var_decl		{ $$ = e_nop(); ctx.defglobvar($2.name, $2.t); ctx.global_initializers.emplace_back(M($2.v));}
-	| "var" var_decl 		{ $$ = ctx.defvar(M($2.name), $2.t) %= M($2.v); };
+var_def: "static" var_decl		{
+	$$ = e_nop(); 
+	   if (!$2.array_size) {
+			ctx.defglobvar($2.name, $2.t);  ctx.global_initializers.emplace_back(M($2.v));
+	   }
+	   else {
+		    ctx.global_initializers.emplace_back(ctx.defglobvar($2.name, {$2.t, true}) %= e_makearray(ex_rtype{$2.t, true}, get_array_size_for($2.t, $2.array_size)));
+	   }
+	}
+	| "var" var_decl 	    	{
+		if (!$2.array_size) {
+			$$ = ctx.defvar(M($2.name), $2.t) %= M($2.v); 
+		}
+		else {
+			$$ = ctx.defvar(M($2.name), {$2.t, true}) %= e_makearray(ex_rtype{$2.t, true}, get_array_size_for($2.t, $2.array_size)); 
+		}
+	};
+
 var_defs: var_defs ',' var_def		{ $$ = M($1); $$.params.push_back(M($3));}
-	| var_def			{ $$ = e_comma(M($1));};
+	| var_def						{ $$ = e_comma(M($1));};
 comp_stmt: '{'				{ ++ctx; $$ = e_comma();}
 	 | comp_stmt stmt		{ $$ = M($1); $$.params.push_back(M($2));};
 
@@ -681,6 +721,7 @@ ex_rtype expression::get_type() const {
 		case ex_type::comma:
 			return params.back().get_type();
 		case ex_type::cast:
+		case ex_type::makearray:
 			return castvalue;
 		case ex_type::fcall:
 			return params.front().get_type();

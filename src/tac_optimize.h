@@ -39,6 +39,7 @@ struct tacoptimizecontext {
 	int optimize_simplify();
 	int optimize_rename(); // renames registers to use less of them
 	int optimize_canonize(); // canonize: in commutative statements order by 
+	int optimize_stackoff(); // replaces constant math on stackoffs with more stackoffs
 
 	void remove_register_holes(); // not an optimizer as it is only ran once for the entire cu
 };

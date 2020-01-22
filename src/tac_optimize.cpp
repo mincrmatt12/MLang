@@ -29,8 +29,9 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 			optimize_copyelision() ||
 			optimize_simplify()    || 
 			optimize_rename()      ||
+			optimize_stackoff()    ||
 			optimize_canonize()
-	) { }
+	) {}
 	remove_register_holes();
 }
 
@@ -130,7 +131,7 @@ int  tacoptimizecontext::optimize_deduplicate() {
 	return modifications;
 }
 
-inline constexpr int size_of_rtype(const ex_rtype &r) {
+inline constexpr uint64_t size_of_rtype(const ex_rtype &r) {
 	return r.ptr == nullptr ? r.size : 64;
 }
 
@@ -483,7 +484,7 @@ int  tacoptimizecontext::optimize_simplify() {
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Ok, replace this statement with a literal mov
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
-								(s->params[1].num + s->params[2].num) & (1<<size_of_rtype(s->lhs().rt))-1
+								(s->params[1].num + s->params[2].num) // & ((1llu<<size_of_rtype(s->lhs().rt))-1)
 					));
 					++modifications;
 					DUMP_T std::cout << "replaced add with literal params" << std::endl;
@@ -519,7 +520,7 @@ int  tacoptimizecontext::optimize_simplify() {
 				if (std::all_of(++s->params.begin(), s->params.end(), ai_num)) {
 					// Ok, replace this statement with a literal mov
 					s->reinit(st_type::mov, s->lhs(), addr_ref(ar_type::num, 
-								s->params[1].num * s->params[2].num & (1<<size_of_rtype(s->lhs().rt))-1
+								(s->params[1].num * s->params[2].num) // & ((1llu<<size_of_rtype(s->lhs().rt))-1)
 					));
 					++modifications;
 					DUMP_T std::cout << "replaced mul with literal params" << std::endl;
@@ -672,6 +673,7 @@ int  tacoptimizecontext::optimize_simplify() {
 					++modifications;
 					DUMP_T std::cout << "replaced ifeq == 0 with !ifnz" << std::endl;
 				}
+
 				break;
 			}
 			case st_type::mov:
@@ -912,6 +914,43 @@ int tacoptimizecontext::optimize_canonize() {
 				++modifications;
 			}
 		}
+	});
+	return modifications;
+}
+
+int tacoptimizecontext::optimize_stackoff() {
+	// Find all adds that reference a stackoff
+	int modifications = 0;
+	
+	auto info = access_info(*optimizing, false, false); // this might be a true, fales i have to debate
+
+	traverse_f(optimizing->start, [&](statement *&s){
+		if (!si_add(*s)) return;
+		// check if it is of the form reg + const
+		if (!(ai_reg(s->params[1]) && ai_num(s->rhs()))) return;
+
+		// Where did the reg come from?
+		// (and where did it go)
+		
+		auto sources = info.data[s].parameters[1];
+
+		if (sources.size() != 1 || !std::holds_alternative<statement *>(*sources.begin())) return;
+
+		auto src = std::get<statement *>(*sources.begin());
+
+		// Is the source a stackoffset?
+		if (!si_stackoff(*src)) return;
+
+		// Is the rhs constant?
+		
+		if (!ai_num(src->rhs())) return;
+
+		// Eliminate this add
+		long new_offset = src->rhs().num + s->rhs().num;
+
+		s->reinit(st_type::stackoff, s->lhs(), addr_ref{ar_type::num, new_offset});
+		++modifications;
+		std::cout << "replaced add from stackoff" << std::endl;
 	});
 	return modifications;
 }

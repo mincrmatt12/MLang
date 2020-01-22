@@ -75,7 +75,9 @@ addr_ref compiler::compile(const expression &expr) {
 	// Sets the tgt pointer to the next poitner, and sets the parameter to deref of tgt, so tgt (next) = s, tgt = s->next.
 	auto append = [&](statement *s) {for (*currently_compiling->tgt = s; s != nullptr; s = *currently_compiling->tgt) currently_compiling->tgt = &s->next; };
 	// make() create a new unnamed register for expression usages
-	auto make =   [&](ex_rtype &&t)	{return addr_ref(ar_type::reg, currently_compiling->counter++, std::forward<ex_rtype>(t));};
+	auto make =   [&](ex_rtype &&t)	{
+		return addr_ref(ar_type::reg, currently_compiling->counter++, std::forward<ex_rtype>(t));
+	};
 
 	addr_ref result{};
 
@@ -209,6 +211,16 @@ addr_ref compiler::compile(const expression &expr) {
 				// Otherwise generate the cast instruction. This is pretty much the same as a mov but creates additional
 				// code to handle the type switch
 				append(s_cast(result = make(std::move(ex_rtype(expr.castvalue))), compile(expr.params.front())));
+				break;
+			}
+		case ex_type::makearray:
+			{
+				if (!is_literal_number(expr.params.back()))
+					throw std::runtime_error("arrays must have constant size");
+				int array_size = expr.params.back().numvalue;
+				// Like str
+				append(s_stackoff(result = make({}), addr_ref{ar_type::num, currently_compiling->array_block_size}));
+				currently_compiling->array_block_size += array_size;
 				break;
 			}
 	}

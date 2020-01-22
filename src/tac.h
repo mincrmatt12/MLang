@@ -48,8 +48,11 @@ struct addr_ref {
 
 	bool operator==(const addr_ref& other) const {
 		if (!(other.t == t)) return false;
-		if (t == ar_type::num || t == ar_type::reg) {
+		if (t == ar_type::reg) {
 			return num == other.num && rt == other.rt;
+		}
+		else if (t == ar_type::num) {
+			return num == other.num;
 		}
 		else {
 			return ident == other.ident && rt == other.rt;
@@ -92,6 +95,7 @@ ENUM_ADDR_REFS(o)
 	o(addrof) /* get the physical address of p1 and put it into p0. should be implemented with a simple constant store at the compile level */ \
 	o(str) /* kludge to get a pointer to the string table and place it into the target. if constants are added they will be stored with this type 
 		  after it is renamed */ \
+	o(stackoff) /* kludge for arrays */ \
 	o(cast) /* perform 0-based casting between registers */ \
 	/* Special Insns -- combined versions of other ones to make the job of codegen easier */ \
 	o(ifeq) o(ifgt)
@@ -192,6 +196,7 @@ struct compilation_unit {
 	unsigned num_params = 0; unsigned num_locals = 0;
 	unsigned counter = 0;
 	std::vector<ex_rtype> parameter_types;
+	unsigned array_block_size = 0;
 	
 	compilation_unit() : tgt(&start) {};
 

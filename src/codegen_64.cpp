@@ -118,7 +118,9 @@ namespace x86_64 {
 		/* ADDROF */
 		{10, st_type::addrof, "lea %0, %n1", {AnyReg(AnyS), Mem(AnyS)}},
 		/* STR */
-		{10, st_type::str,  "lea %0, [rel __STRTABLE]", {AnyReg(AnyS)}}
+		{10, st_type::str,  "lea %0, [rel __STRTABLE]", {AnyReg(AnyS)}},
+		/* STACKOFF */
+		{10, st_type::stackoff, "lea %0, [rbp - %S1]", {AnyReg({p_size::QWORD}), Imm(AnyS)}}
 	};
 
 #undef AnyS      
@@ -198,12 +200,6 @@ namespace x86_64 {
 	}
 
 	p_size storage::get_size() const {
-		if (this->type == IMM) {
-			unsigned long ul = imm_or_offset;
-			if (ul < 256u) return p_size::BYTE;
-			if (ul < 65536u) return p_size::WORD;
-			return p_size::DWORD;
-		}
 		switch (this->size) {
 			case 8:
 				return p_size::BYTE;
@@ -485,7 +481,8 @@ namespace x86_64 {
 		// Now we have a list of requirements, go and allocate the array.
 		
 		this->stores.clear(); this->stores.resize(maximum_register + 1);
-		local_stack_usage = 0;
+		if (current->array_block_size % 8 != 0) current->array_block_size += (8 - current->array_block_size % 8);
+		local_stack_usage = current->array_block_size;
 
 		// Go through all registers
 		
@@ -919,6 +916,10 @@ use_mem:
 							case 'n':
 								size_override = 255;
 								++i;
+								break;
+							case 'S':
+								size_override = 254;
+								++i;
 							default:
 								break;
 						}
@@ -926,6 +927,11 @@ use_mem:
 
 						if (size_override == 255) {
 							result += stores[offset].addr_string();
+							++i;
+							continue;
+						}
+						else if (size_override == 254) {
+							result += std::to_string(current->array_block_size - stores[offset].imm_or_offset);
 							++i;
 							continue;
 						}
@@ -954,7 +960,9 @@ use_mem:
 			return {stores[ar.num], static_cast<uint8_t>(ar.rt.size)};
 		}
 		else if (ai_num(ar)) {
-			return {storage::IMM, ar.num};
+			storage temp = {storage::IMM, ar.num};
+			if (temp.size < ar.rt.size) temp.size = ar.rt.size;
+			return temp;
 		}
 		else {
 			switch (ar.ident.type) {
@@ -1218,6 +1226,7 @@ other:
 		
 		reduce_via_regex(std::regex(R"(pop r(\w\w)\npop r(\w\w)\npush r\2\npush r\1\n)"));
 		reduce_via_regex(std::regex(R"(sub rsp, (\d+)\nadd rsp, \1\n")"));
+		reduce_via_regex(std::regex(R"(mov (r\w\w), \1\n)"));
 
 		return result;
 	}
