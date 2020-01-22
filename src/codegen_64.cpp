@@ -93,10 +93,10 @@ namespace x86_64 {
 		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), AnyReg({p_size::WORD})}},
 		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), AnyReg({p_size::DWORD})}},
 		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), AnyReg({p_size::QWORD})}},
-		{10, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), Imm({p_size::BYTE})}},
-		{10, st_type::write, "mov word [%0], %1", {RegImm(AnyS), Imm(MWordS)}},
-		{10, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), Imm(DWordS)}},
-		{10, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), Imm(AnyS)}},
+		{11, st_type::write, "mov byte [%0], %1", {RegImm(AnyS), Imm({p_size::BYTE})}},
+		{12, st_type::write, "mov word [%0], %1", {RegImm(AnyS), Imm(MWordS)}},
+		{13, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), Imm(DWordS)}},
+		{14, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), Imm(AnyS)}},
 		/* EQ */
 		{10, st_type::eq,   "cmp %1, %2 | sete %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
 		{10, st_type::eq,   "cmp %2, %1 | sete %b0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
@@ -200,6 +200,12 @@ namespace x86_64 {
 	}
 
 	p_size storage::get_size() const {
+		if (this->type == IMM) {
+			unsigned long ul = imm_or_offset;
+			if (ul < 256u) return p_size::BYTE;
+			if (ul < 65536u) return p_size::WORD;
+			return p_size::DWORD;
+		}
 		switch (this->size) {
 			case 8:
 				return p_size::BYTE;
@@ -623,9 +629,34 @@ namespace x86_64 {
 		// Try and find matching combinations
 		for (const auto& possible : recipes) {
 			if (possible.type != stmt->t) continue;
-			if (std::equal(stores.begin(), stores.end(), possible.matches.cbegin(), [&](const auto &a, const auto& b){
-				return a.matches(b, stores);
+			if (std::equal(stores.begin(), stores.end(), possible.matches.cbegin(), [&](const auto &a, const match_t& b){
+				// Extra check for pointer writes:
+				if (si_write(*stmt) && possible.cost > 10 && b.valid_types.size() == 1 && *b.valid_types.cbegin() == match_t::IMM) {
+					// do the types match
+					switch (possible.cost) {
+						default:
+							return false;
+						case 11:
+							// byte
+							if (stmt->params[1].rt.size != 8) return false;
+							return true;
+						case 12:
+							// word
+							if (stmt->params[1].rt.size != 16) return false;
+							return true;
+						case 13:
+							// dword
+							if (stmt->params[1].rt.size != 32) return false;
+							return true;
+						case 14:
+							// qword
+							if (stmt->params[1].rt.size != 64) return false;
+							return true;
+					}
+				}
+				else return a.matches(b, stores);
 			})) {
+
 				considered_set.push_back(&possible);
 			}
 		}
@@ -960,9 +991,7 @@ use_mem:
 			return {stores[ar.num], static_cast<uint8_t>(ar.rt.size)};
 		}
 		else if (ai_num(ar)) {
-			storage temp = {storage::IMM, ar.num};
-			if (temp.size < ar.rt.size) temp.size = ar.rt.size;
-			return temp;
+			return {storage::IMM, ar.num};
 		}
 		else {
 			switch (ar.ident.type) {
