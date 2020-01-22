@@ -112,7 +112,7 @@ private:
 			if (!changes) return;
 			where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
 
-			if (include_ifnz && si_ifnz(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
+			if (include_ifnz && (si_ifnz(*where) || si_ifeq(*where)) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
 		}
 
 		if (where->cond != nullptr) {

@@ -253,7 +253,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 					bool is_zero = false;
 					statement * src = nullptr;
 					if (!std::all_of(d.begin(), d.end(), [&](auto &source){
-								// Make sure that a) this is a mov and b) it's arg is a literal and c) the literal is equal for the first statement
+								// Make sure that a) this is an if and b) it's arg is a literal and c) the literal is equal for the first statement
 								src = *std::get_if<statement *>(&source);
 								return si_ifnz(*src) && /* is the statement reachable from either next or cond but not both */ (( is_zero = reachable(src->next, s) ) != reachable(src->cond, s))
 								                    && /* the register compared in the ifnz is equal to reg */ reg == src->lhs();

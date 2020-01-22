@@ -1095,28 +1095,31 @@ use_mem:
 other:
 				emit("call ", storage{get_storage_for(call_tgt), 64});
 			}
-			// Xor out low bytes
-			if (ai_ident(call_tgt) && (target.type == storage::REG || (target.type == storage::STACKOFFSET && target.size != call_tgt.ident.t.size))) {
-				switch (call_tgt.ident.t.size) {
-					case 32:
-						emit("mov eax, eax");
-						break;
-					case 16:
-						emit("and rax, 0xffff");
-						break;
-					case 8:
-						emit("and rax, 0xff");
-					default:
-						break;
+			// Is this a null-return function?
+			if (!current_ai || current_ai->data[s].parameters[0].size()) {
+				// Xor out low bytes
+				if (ai_ident(call_tgt) && (target.type == storage::REG || (target.type == storage::STACKOFFSET && target.size != call_tgt.ident.t.size))) {
+					switch (call_tgt.ident.t.size) {
+						case 32:
+							emit("mov eax, eax");
+							break;
+						case 16:
+							emit("and rax, 0xffff");
+							break;
+						case 8:
+							emit("and rax, 0xff");
+						default:
+							break;
+					}
 				}
-			}
 
-			// Grab result
-			if (target.type == storage::REG && target.regno != 6) {
-				emit("mov ", storage{target, 64}, ", ", storage{6, 64});
-			}
-			else if (target.type == storage::STACKOFFSET) {
-				emit("mov ", target, ", ", storage{6, target.size});
+				// Grab result
+				if (target.type == storage::REG && target.regno != 6) {
+					emit("mov ", storage{target, 64}, ", ", storage{6, 64});
+				}
+				else if (target.type == storage::STACKOFFSET) {
+					emit("mov ", target, ", ", storage{6, target.size});
+				}
 			}
 
 			// Add back the stack
