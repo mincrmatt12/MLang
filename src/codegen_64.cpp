@@ -1195,6 +1195,7 @@ other:
 	}
 
 	std::string remove_useless_stack_ops(const std::string &original) {
+		if (!do_remove_stackops()) return original;
 		std::string result = original;
 		auto reduce_via_regex = [&](std::regex replacer){
 			std::string result_old = result;
