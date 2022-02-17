@@ -28,6 +28,15 @@ void tacoptimizecontext::optimize_unit(compilation_unit &u) {
 			optimize_deduplicate() ||
 			optimize_copyelision() ||
 			optimize_simplify()    || 
+			optimize_rename()      
+			/* don't canonize for maximum impact */
+	) { }
+	while (
+			optimize_deadcode()    ||
+			optimize_jumpthread()  ||
+			optimize_deduplicate() ||
+			optimize_copyelision() ||
+			optimize_simplify()    || 
 			optimize_rename()      ||
 			optimize_stackoff()    ||
 			optimize_canonize()
@@ -280,8 +289,53 @@ int  tacoptimizecontext::optimize_copyelision() {
 							}
 						}
 					}
-					
 			});
+
+			// Try the other strategy, which is to eliminate constructs like
+			// if (something) something
+			// if (something) something_else
+			// something_also_else
+			//
+			// where s is the first conditional's action
+			//
+			// This can be optimized if:
+			if (s->next != nullptr && si_if(*s->next)) {
+				// Keep an easyref
+				const auto &d = info.data[s->next];
+				statement * src{};
+
+				// Make sure all of its params are the same at both points
+				if (std::all_of(s->next->params.begin(), s->next->params.end(), [&, i=0] (const addr_ref& param) mutable -> bool {
+					if (!std::all_of(d.parameters[i].begin(), d.parameters[i].end(),
+								[&](auto &source){return std::holds_alternative<statement *>(source);})) return false; // Must all be statements. This also weeds out ai_num && ai_ident
+					if (d.parameters[i].size() != 1) return false;
+					statement * src_of_this = std::get<statement *>(*d.parameters[i].begin());
+					if (src && src_of_this != src) return false;
+					src = src_of_this;
+
+
+					// Is the source at src the same source
+					if (src->t != s->next->t) return false;
+					// Are the parameters equal
+					if (src->params[i] != param) return false;
+
+					if (d.parameters[i] != info.data[src].parameters[i]) return false;
+					DUMP_T std::cout << "replaced adjacent equal conditions maybe" << std::endl;
+
+					// Ok, this is good so far
+					++i;
+					return true;
+				})) {
+					DUMP_T std::cout << "replaced adjacent equal conditions maybe" << std::endl;
+					// Make sure the flow makes sense given the diagram
+					if (src->next == s->next && reachable(src->cond, s) && !reachable(src->next, s)) {
+						// Alright, we can thread s->next into s->next->cond
+						++modifications;
+						DUMP_T std::cout << "replaced adjacent equal conditions" << std::endl;
+						s->next = s->next->cond;
+					}
+				}
+			}
 	});
 
 	// Alright. Now for actual copy elision

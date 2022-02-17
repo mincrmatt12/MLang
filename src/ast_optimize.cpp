@@ -522,7 +522,7 @@ int astoptimizecontext::optimize_simplify_casts(expression &e) {
 	// Optimize situations where a cast is taken to the type
 	// which is the same as the result of the casted expr
 	if (is_cast(e)) {
-		if (e.castvalue == e.params.front().get_type()) {
+		if (e.castvalue.size == e.params.front().get_type().size) {
 			++modifications;
 			// Remove the cast
 			DUMP_T std::cout << "removing redundant cast" << std::endl;

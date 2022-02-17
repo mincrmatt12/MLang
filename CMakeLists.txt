@@ -10,6 +10,8 @@ else()
 	add_compile_options(-g)
 endif()
 
+#add_compile_options(-Wall -Wno-unused-function)
+
 find_package(RE2C REQUIRED)
 find_package(BISON REQUIRED)
 
