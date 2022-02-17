@@ -85,7 +85,7 @@ private:
 								if (si_addrof(*writer) && ai_reg(writer->rhs())) {
 									if (si_write(*where) || si_fcall(*where)) {
 										// This is an interesting situation, we have to make it look like it happened.
-										state[writer->rhs().num] = {where};
+										state[writer->rhs().num] = {writer};
 										++changes;
 									}
 									if (si_read(*where)) {
@@ -97,7 +97,7 @@ private:
 													int index3 = i3++;
 													if (reg2 == where->rhs()) {
 														++changes;
-														data[writer_squared].parameters[index3].insert(where);
+														data[writer_squared].parameters[index3].insert(writer);
 													}
 												});
 											}
