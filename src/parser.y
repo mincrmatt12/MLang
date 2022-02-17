@@ -68,6 +68,7 @@ struct ex_rtype {
 	ex_rtype& operator=(ex_rtype&& other) {
 		size = other.size;
 		std::swap(ptr, other.ptr);
+		return *this;
 	}
 
 	bool operator==(const ex_rtype &e) const {
