@@ -815,6 +815,7 @@ int tacoptimizecontext::optimize_rename() {
 								// Otherwise, check what the active source of the register is read by
 								// If we can reach it, then bad things are going to happen
 								else if (std::holds_alternative<statement *>(c_source)) {
+									if (si_addrof(*std::get<statement *>(c_source))) return false;  // this has been written to in a SPECIAAAAAAAAAL WAY
 									auto &dd = info.data[*std::get_if<statement *>(&c_source)].parameters[0];
 									return std::all_of(dd.begin(), dd.end(), [&](auto reader){
 											return std::all_of(checkable.begin(), checkable.end(), [&](auto &beginning){
@@ -844,6 +845,9 @@ int tacoptimizecontext::optimize_rename() {
 						DUMP_T std::cout << "renamed " << original << " to " << i << std::endl;
 						++modifications;
 						return modifications;
+					}
+					else {
+						DUMP_T std::cout << "cancel rename " << writer->lhs().num << " to " << i << std::endl;
 					}
 				}
 			}
