@@ -45,13 +45,26 @@ namespace x86_64 {
 		/* ADD */
 		{ 9, st_type::add,  "inc %0", {RegMem(AnyS), SameAs(0), Const(1)}},
 		{ 9, st_type::add,  "dec %0", {RegMem(AnyS), SameAs(0), Const(-1)}},
-		{10, st_type::add,  "add %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
-		{11, st_type::add,  "add %0, %2", {Mem(AnyS), SameAs(0), AnyReg(AnyS)}},
-		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm(MDWordS)}},
+		{10, st_type::add,  "add %0, %b2", {AnyReg({p_size::BYTE}), SameAs(0), RegMem(AnyS)}},
+		{10, st_type::add,  "add %0, %w2", {AnyReg({p_size::WORD}), SameAs(0), RegMem(AnyS)}},
+		{10, st_type::add,  "add %0, %q2", {AnyReg({p_size::QWORD}), SameAs(0), RegMem(AnyS)}},
+		{10, st_type::add,  "add %0, %d2", {AnyReg({p_size::DWORD}), SameAs(0), RegMem(AnyS)}},
+		{11, st_type::add,  "add %0, %b2", {Mem({p_size::BYTE}), SameAs(0), AnyReg(AnyS)}},
+		{11, st_type::add,  "add %0, %w2", {Mem({p_size::WORD}), SameAs(0), AnyReg(AnyS)}},
+		{11, st_type::add,  "add %0, %d2", {Mem({p_size::DWORD}), SameAs(0), AnyReg(AnyS)}},
+		{11, st_type::add,  "add %0, %q2", {Mem({p_size::QWORD}), SameAs(0), AnyReg(AnyS)}},
+		{10, st_type::add,  "add %0, %2", {RegMem(AnyS), SameAs(0), Imm(AnyS)}},
 		{12, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg({p_size::QWORD}), AnyReg({p_size::QWORD})}},
 		{11, st_type::add,  "lea %0, [%1 + %2]", {AnyReg(AnyS), AnyReg({p_size::QWORD}), Imm(AnyS)}},
 		/* MUL */
-		{10, st_type::mul,  "imul %0, %2", {AnyReg(AnyS), SameAs(0), RegMem(AnyS)}},
+		{10, st_type::mul,  "imul %0, %b2", {AnyReg({p_size::BYTE}), SameAs(0), AnyReg(AnyS)}},
+		{10, st_type::mul,  "imul %0, %w2", {AnyReg({p_size::WORD}), SameAs(0), AnyReg(AnyS)}},
+		{10, st_type::mul,  "imul %0, %d2", {AnyReg({p_size::DWORD}), SameAs(0), AnyReg(AnyS)}},
+		{10, st_type::mul,  "imul %0, %q2", {AnyReg({p_size::QWORD}), SameAs(0), AnyReg(AnyS)}},
+		{10, st_type::mul,  "imul %0, %b2", {AnyReg({p_size::BYTE}), SameAs(0),  Mem({p_size::BYTE})}},
+		{10, st_type::mul,  "imul %0, %w2", {AnyReg({p_size::WORD}), SameAs(0),  Mem({p_size::WORD})}},
+		{10, st_type::mul,  "imul %0, %d2", {AnyReg({p_size::DWORD}), SameAs(0), Mem({p_size::DWORD})}},
+		{10, st_type::mul,  "imul %0, %q2", {AnyReg({p_size::QWORD}), SameAs(0), Mem({p_size::QWORD})}},
 		{11, st_type::mul,  "imul %0, %1, %2", {AnyReg(AnyS), RegMem(AnyS), Imm(MDWordS)}},
 		{ 9, st_type::mul,  "shl %0, 1", {RegMem(AnyS), SameAs(0), Const(2)}},
 		{ 9, st_type::mul,  "shl %0, 2", {RegMem(AnyS), SameAs(0), Const(4)}},
@@ -504,7 +517,8 @@ namespace x86_64 {
 			const auto& v = storage_requirements[i];
 			if (v.count(MEMORY) > 0 || regno > 13) {
 				// This needs to go onto the stack, so allocate another 
-				local_stack_usage += maximum_seen_size[i] / 8;
+				int allocsize = maximum_seen_size[i] / 8;
+				local_stack_usage += ((local_stack_usage % allocsize) ? (allocsize - local_stack_usage % allocsize) : (0)) + allocsize;
 				
 				allocate(i, storage::STACKOFFSET, local_stack_usage, (uint8_t)maximum_seen_size[i]);
 
@@ -631,7 +645,7 @@ namespace x86_64 {
 			if (possible.type != stmt->t) continue;
 			if (std::equal(stores.begin(), stores.end(), possible.matches.cbegin(), [&](const auto &a, const match_t& b){
 				// Extra check for pointer writes:
-				if (si_write(*stmt) && possible.cost > 10 && b.valid_types.size() == 1 && *b.valid_types.cbegin() == match_t::IMM) {
+				if (si_write(*stmt) && possible.cost > 10 && b.valid_types.size() == 1 && *b.valid_types.cbegin() == match_t::IMM && a.type == storage::IMM) {
 					// do the types match
 					switch (possible.cost) {
 						default:
@@ -738,7 +752,7 @@ namespace x86_64 {
 						else if (stores[0].type == storage::STACKOFFSET || stores[0].type == storage::GLOBAL) {
 							// IN THIS CASE: we need to use a mov, because it is memory, and if it was REGMEM it would have been matches.
 							// The register, however, isn't always defined. If it isn't, find one.
-							int reg = wparam.parm != ~0 ? wparam.parm : get_clobber_register(important_registers);
+							int reg = wparam.parm != ~0 ? wparam.parm : get_clobber_register(stmt, important_registers);
 							// Add to clobber
 							added_registers[possible].insert(reg);
 							// Emit a mov
@@ -784,9 +798,17 @@ namespace x86_64 {
 						if (stores[i].matches(possible->matches[i])) {
 							// Alright, all we have to do is allocate another register
 							std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
-							int newregno = get_clobber_register(used_registers);
+							int newregno = get_clobber_register(stmt, used_registers);
+
+							if (newregno == -1) {
+								added_costs[possible] = -1;
+								break;
+							}
 
 							storage new_register{newregno, stores[i].size};
+
+							std::cout << "rmap " << new_register.to_string() << " " << stores[i].to_string() << stores[i].size;
+
 							added_commands[possible] = "mov " + new_register.to_string() + ", " + stores[i].to_string() + "\n" + added_commands[possible];
 							added_registers[possible].insert(newregno);
 
@@ -808,10 +830,18 @@ namespace x86_64 {
 						// Otherwise, this means that we have to convert a ThrAC to a TwAC.
 						// Do this by emitting a mov.
 						if (chosen_stores[possible][0].type == storage::REG) {
-							if (stores[i].type == storage::IMM) 
+							if (stores[i].type == storage::IMM) {
 								emit("mov ", storage{chosen_stores[possible][0], 64}, ", ", stores[i]);
-							else
+							}
+							else {
 								emit("mov ", chosen_stores[possible][0], ", ", stores[i]);
+							}
+							std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
+							for (size_t j = i + 1; j < stores.size(); ++j) {
+								if (stores[j].type == storage::REG && stores[j].regno == chosen_stores[possible][0].regno) {
+									needs_remapping.insert(j);
+								}
+							}
 							// Mark chosen storage
 							chosen_stores[possible][i] = chosen_stores[possible][0];
 						}
@@ -822,21 +852,36 @@ namespace x86_64 {
 							// Mark chosen storage
 							chosen_stores[possible][i] = chosen_stores[possible][0];
 						}
-						else {
-							// Mark as invalid
-							added_costs[possible] = -1;
+						else if ((chosen_stores[possible][0].type == storage::STACKOFFSET || chosen_stores[possible][0].type == storage::GLOBAL) && (stores[i].type == storage::STACKOFFSET || stores[i].type == storage::GLOBAL)) {
+							// Use a clobber to do two moves
+							std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
+							// Try and find a posible clobber
+							if (get_clobber_register(stmt, used_registers) == -1) { // mark invalid
+								added_costs[possible] = -1;
+							}
+							else {
+								int regno = get_clobber_register(stmt, used_registers);
+								
+								emit("mov ", storage{regno, stores[0].size}, ", ", stores[0]);
+								emit("mov ", chosen_stores[possible][0], ", ", storage{regno, stores[0].size});
+
+								added_costs[possible]++;
+								added_costs[possible]++;
+								// Mark chosen storage
+								chosen_stores[possible][i] = chosen_stores[possible][0];
+							}
 							break;
 						}
 					}
 					// Check if it should be either register or memory and jump to appropriate block
 					else if (possible->matches[i].valid_types.count(match_t::MEM) && possible->matches[i].valid_types.count(match_t::REG)) {
-						if (is_clobber_available()) goto use_register;
-						else 	                    goto use_mem;
+						if (get_clobber_register(stmt) != -1) goto use_register;
+						else 	                    		  goto use_mem;
 					}
 					else if (possible->matches[i].valid_types.count(match_t::REG)) {
 use_register:
 						std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
-						int regno = possible->matches[i].parm != ~0 ? possible->matches[i].parm : get_clobber_register(used_registers);
+						int regno = possible->matches[i].parm != ~0 ? possible->matches[i].parm : get_clobber_register(stmt, used_registers);
 
 						if (used_registers.count(regno)) {
 							// Shuffling of the other read parameters is critical. Becuase of laziness, add a simple marker.
@@ -1005,28 +1050,17 @@ use_mem:
 		}
 	}
 
-	bool codegenerator::is_clobber_available() {
-		int rcount;
-		for (const auto &k : stores) {
-			if (k.type == storage::REG) ++rcount;
+	int codegenerator::get_clobber_register(statement * at, std::set<int> ignore) {
+		for (int i = 0; i < 14; ++i) {
+			if (ignore.count(i)) continue;
+			if (!is_clobbered_for(i, at)) {
+				std::cout << "!icf " << i << " ";
+				val_print(*at);
+				std::cout << "\n";
+				return i;
+			}
 		}
-		return rcount < 14;
-	}
-
-	int codegenerator::get_clobber_register(std::set<int> regs) {
-		std::set<int> used;
-		for (const auto &k : stores) {
-			if (k.type == storage::REG) used.insert(k.regno);
-		}
-		for (int regno = 13; regno >= 0; --regno) {
-			if (used.count(regno) || regs.count(regno)) continue;
-			return regno;
-		}
-		for (int regno = 13; regno >= 0; --regno) {
-			if (regs.count(regno)) continue;
-			return regno;
-		}
-		throw std::runtime_error("OUT OF REGISTERS OH NO POOOOOO");
+		return -1;
 	}
 
 	bool codegenerator::is_register_used(int reg) {
