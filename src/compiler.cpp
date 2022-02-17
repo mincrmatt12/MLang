@@ -220,7 +220,7 @@ addr_ref compiler::compile(const expression &expr) {
 				int array_size = expr.params.back().numvalue;
 				// Like str
 				append(s_stackoff(result = make({}), addr_ref{ar_type::num, currently_compiling->array_block_size}));
-				currently_compiling->array_block_size += array_size;
+				currently_compiling->array_block_size += array_size % 8 ? (array_size + (8 - array_size % 8)) : array_size;
 				break;
 			}
 	}
