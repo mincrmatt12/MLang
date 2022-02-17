@@ -8,5 +8,6 @@ extern scanf(8* fmt, ...);
 extern puts(8* str);
 
 extern malloc<64 *>(64 size);
+extern memset<64>(64 * ptr, 8 value, 64 length);
 extern free(64 * ptr);
 extern realloc<64 *>(64 * ptr, 64 size);

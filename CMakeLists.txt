@@ -14,7 +14,6 @@ find_package(RE2C REQUIRED)
 find_package(BISON REQUIRED)
 
 RE2C_TARGET(NAME mlang_re2c INPUT ${CMAKE_SOURCE_DIR}/src/parser.y OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/parser.y.re)
-
 BISON_TARGET(mlang_yacc ${CMAKE_CURRENT_BINARY_DIR}/parser.y.re ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
