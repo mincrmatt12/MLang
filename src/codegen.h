@@ -25,6 +25,33 @@
 #include "tac_optimize.h"
 #include "flow.h"
 
+template<typename T, typename=void>
+struct emit_helper_ts_t {static const bool value = false;};
+template<typename T>
+struct emit_helper_ts_t<T, std::void_t<decltype(std::declval<T>().to_string())>> {static const bool value = true;};
+template<typename T> std::string emit_helper(const T& t) {
+	if constexpr (std::is_constructible_v<std::string, T>)
+		return std::string{t};
+	else if constexpr (emit_helper_ts_t<T>::value)
+		return t.to_string();
+	else 
+		return std::to_string(t);
+}
+struct emitter {
+	emitter(std::string &result) : result(result) {}
+	emitter(std::string &result, std::string prefix) : result(result), prefix(prefix) {}
+	template<typename ...Args>
+	void inline operator()(Args &&...args) {
+		result += prefix + (emit_helper(std::forward<Args>(args)) + ...) + '\n';
+	}
+	void inline operator()() {
+		result += '\n';
+	}
+private:
+	std::string &result;
+	std::string prefix = "";
+};
+
 namespace x86_64 {
 	// Utility function to postprocess generated assembler
 	std::string remove_useless_stack_ops(const std::string &original);
@@ -145,6 +172,40 @@ namespace x86_64 {
 		bool is_register_used(int regno);
 		int  get_clobber_register(statement * stmt, std::set<int> ignore={});
 		bool is_clobbered_for(int reg, statement* stmt);
+	};
+}
+
+namespace cgotos {
+	struct declared_function {
+		compilation_unit cu;
+		std::string name;
+		std::vector<std::map<ex_rtype, std::string>> register_types{};
+		std::vector<std::string> argnames{};
+
+		declared_function(compilation_unit &&cu, const std::string& name) :
+			cu(cu), name(name) {}
+	};
+
+	struct codegenerator {
+		codegenerator(tacoptimizecontext &&ctx);
+
+		std::string generate();
+	private:
+		void extract_types(declared_function &func);
+
+		std::string generate_function_header(const declared_function &func, bool use_names=true);
+		std::string generate_function(declared_function &func);
+		void generate_vardecls(declared_function &func, emitter& emit);
+
+		void generate_stmt(statement *stmt, emitter& emit, std::string labelname="");
+
+		std::string cnameof(const addr_ref& ca);
+		std::string ctypeof(const ex_rtype& er);
+		
+		std::string string_table;
+		std::vector<declared_function> functions;
+
+		declared_function * current{};
 	};
 }
 

@@ -47,10 +47,18 @@ int main(int argc, char ** argv) {
 
 	debug_dump_ctx(tac_octx);
 
+	std::string compiled;
+
 	if (arch == "x86_64" || arch == "amd64" || arch == "") {
 		x86_64::codegenerator gen(std::move(tac_octx));
-		std::ofstream out(a.output_name);
-		out << gen.generate();
+		compiled = gen.generate();
 	}
+	else if (arch == "gotoc" || arch == "c" || arch == "cgotos") {
+		cgotos::codegenerator gen(std::move(tac_octx));
+		compiled = gen.generate();
+	}
+
+	std::ofstream out(a.output_name);
+	out << compiled;
 	return 0;
 }

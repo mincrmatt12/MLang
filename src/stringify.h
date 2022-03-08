@@ -176,6 +176,9 @@ static void val_print(const addr_ref &r) {
 			break;
 		case ar_type::reg:
 			std::cout << "R" << r.num;
+			if (r.has_associated_name) {
+				std::cout << "<" << r.associated_name << ">";
+			}
 			break;
 		case ar_type::ident:
 			val_print(r.ident);

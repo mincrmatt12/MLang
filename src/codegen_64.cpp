@@ -320,31 +320,6 @@ namespace x86_64 {
 		return output;
 	}
 
-	template<typename T, typename=void>
-	struct emit_helper_ts_t {static const bool value = false;};
-	template<typename T>
-	struct emit_helper_ts_t<T, std::void_t<decltype(std::declval<T>().to_string())>> {static const bool value = true;};
-	template<typename T> std::string emit_helper(const T& t) {
-		if constexpr (std::is_constructible_v<std::string, T>)
-			return std::string{t};
-		else if constexpr (emit_helper_ts_t<T>::value)
-			return t.to_string();
-		else 
-			return std::to_string(t);
-	}
-	struct emitter {
-		emitter(std::string &result) : result(result) {}
-		template<typename ...Args>
-		void inline operator()(Args &&...args) {
-			result += (emit_helper(std::forward<Args>(args)) + ...) + '\n';
-		}
-		void inline operator()() {
-			result += '\n';
-		}
-	private:
-		std::string &result;
-	};
-
 	std::string codegenerator::generate_unit(compilation_unit &cu) {
 		current = &cu;
 		if (current_ai != nullptr) delete current_ai;
@@ -406,20 +381,7 @@ namespace x86_64 {
 
 		// Now, using a similar method to the debug printer, construct a list of labels.
 		
-		auto labels = std::map<statement *, int>{};
-		auto stmts  = traverse_v(cu.start);
-
-		{
-			auto add_label = [&, l=0](statement * i) mutable {
-				if (labels.count(i) == 0) labels[i] = l++;
-			};
-
-			for (std::size_t i = 0; i < stmts.size(); ++i) {
-				auto st = stmts[i];
-				if (st->cond != nullptr) add_label(st->cond);
-				if (st->next != nullptr && stmts[i+1] != st->next) add_label(st->next);
-			}
-		}	
+		auto [stmts, labels] = traverse_l(cu.start);
 
 		// Alright, we're now able to begin instruction conversion
 		//
@@ -1116,9 +1078,6 @@ use_mem:
 		for (int i = 0; i < 14; ++i) {
 			if (ignore.count(i)) continue;
 			if (!is_clobbered_for(i, at)) {
-				//std::cout << "!icf " << i << " ";
-				//val_print(*at);
-				//std::cout << "\n";
 				return i;
 			}
 		}

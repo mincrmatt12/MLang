@@ -36,6 +36,8 @@ struct addr_ref {
 	long num=0;
 	identifier ident{};
 	ex_rtype rt{64, false};
+	std::string associated_name{};
+	bool has_associated_name = false;
 	
 	addr_ref() = default;
 
@@ -70,6 +72,11 @@ struct addr_ref {
 	bool is_volatile() const {
 		return t == ar_type::ident && ident.type == id_type::global_var;
 	};
+
+	void attach_dbgname(const std::string& x) {
+		this->associated_name = x;
+		this->has_associated_name = true;
+	}
 };
 
 #define o(n) \
@@ -262,6 +269,25 @@ static std::vector<statement *> traverse_v(statement *s) {
 	std::vector<statement *> result{};
 	traverse_f(s, [&](statement *t){result.push_back(t);});
 	return result;
+}
+
+static std::tuple<std::vector<statement *>, std::map<statement *, int>> traverse_l(statement *s) {
+	std::map<statement *, int> labels = std::map<statement *, int>{};
+	std::vector<statement *> stmts  = traverse_v(s);
+
+	{
+		auto add_label = [&, l=0](statement * i) mutable {
+			if (labels.count(i) == 0) labels[i] = l++;
+		};
+
+		for (std::size_t i = 0; i < stmts.size(); ++i) {
+			auto st = stmts[i];
+			if (st->cond != nullptr) add_label(st->cond);
+			if (st->next != nullptr && stmts[i+1] != st->next) add_label(st->next);
+		}
+	}	
+	
+	return std::make_tuple(stmts, labels);
 }
 
 template<typename T>

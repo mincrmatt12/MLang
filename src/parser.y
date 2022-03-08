@@ -84,8 +84,19 @@ struct ex_rtype {
 	bool operator!=(const ex_rtype &e) const {
 		return !operator==(e);
 	}
+
 	bool operator<(const ex_rtype &e) const {
-		return std::tie(ptr, size) < std::tie(e.ptr, e.size);
+		if (*this == e) return false;
+
+		if (size < e.size) return true;
+		else if (size > e.size) return false;
+		else {
+			if (!ptr && e.ptr) return true;
+			if (!e.ptr) return false;
+			else {
+				return ptr->operator<(*e.ptr);
+			}
+		}
 	}
 };
 

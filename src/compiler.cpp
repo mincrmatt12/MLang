@@ -97,9 +97,11 @@ addr_ref compiler::compile(const expression &expr) {
 						 break;
 					case id_type::local_var:
 						 result = addr_ref(ar_type::reg, currently_compiling->num_params + expr.ident.index, expr.get_type());
+						 result.attach_dbgname(expr.ident.name);
 						 break;
 					case id_type::parameter:
 						 result = addr_ref(ar_type::reg, expr.ident.index, expr.get_type());
+						 result.attach_dbgname(expr.ident.name);
 						 break;
 				}
 				break;
@@ -168,7 +170,7 @@ addr_ref compiler::compile(const expression &expr) {
 				append(s_fcall(parameters));
 				break;
 			}
-		// Aaaaaand now.... CONDITIONALS!!!! CRAP!!!!
+		// Aaaaaand now.... CONDITIONALS!!!! 
 		case ex_type::l_and:
 		case ex_type::l_or:
 		case ex_type::loop:

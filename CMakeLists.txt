@@ -23,7 +23,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 message(STATUS ${BISON_mlang_yacc_OUTPUTS})
 add_executable(mlc src/args.cpp src/main.cpp src/ast_optimize.cpp
 	           src/compiler.cpp src/tac_optimize.cpp src/preprocess.cpp 
-			   src/codegen_64.cpp src/flow.cpp ${BISON_mlang_yacc_OUTPUTS})
+			   src/codegen_64.cpp src/codegen_cgotos.cpp src/flow.cpp ${BISON_mlang_yacc_OUTPUTS})
 
 # Install
 install(TARGETS mlc RUNTIME DESTINATION bin)
