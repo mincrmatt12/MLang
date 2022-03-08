@@ -375,11 +375,15 @@ int  tacoptimizecontext::optimize_copyelision() {
 			addr_ref compare = readers[0]->lhs();
 			if (ai_num(compare)) return;
 			if (!std::all_of(readers.begin(), readers.end(), [&](auto &r){return r->lhs() == compare;})) return;
+			
+			// Record the first reader's values for compare to check they all hold the same value.
+			auto compareval = info.data[s].everything[compare.num];
 
 			// Alright, we may be ok. The last thing we need to check is that all of these readers' sources are equal to s
 			for (auto &r : readers) {
 				auto sources = info.data[r].parameters[1];
 				if (sources.size() != 1) return;
+				if (info.data[r].everything[compare.num] != compareval) return;
 				for (auto source : sources) {
 					if (!std::holds_alternative<statement *>(source)) return;
 					if (std::get<statement *>(source) != s) return;
@@ -387,9 +391,12 @@ int  tacoptimizecontext::optimize_copyelision() {
 			}
 
 			// Alright. We are good to go.
-			DUMP_T std::cout << "copy elision (type 2, write)" << std::endl;
+			DUMP_T std::cout << "copy elision (type 2, write) " << reg.num << "->" << compare.num << std::endl;
+			//print_statement_list(optimizing->start);
+			DUMP_T std::cout << "after \n";
 			reg = compare;
 			for (auto &r : readers) r->make_nop();
+			//print_statement_list(optimizing->start);
 			++modifications;
 		});
 

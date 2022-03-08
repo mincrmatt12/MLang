@@ -33,7 +33,6 @@ namespace x86_64 {
 #define Imm(s)    {{match_t::IMM}, s, ~0}
 #define Mem(s)    {{match_t::MEM}, s, ~0}
 #define Const(x)  {{match_t::CONSTIMM}, AnyS, x}
-#define Ident     {{match_t::IDENT}, AnyS, 0}
 
 	const recipe recipes[] = {
 		/* NOP */
@@ -148,7 +147,15 @@ namespace x86_64 {
 #undef Imm    
 #undef Mem
 #undef Const
-#undef Ident  
+
+	uint8_t psize_to_n(p_size rs) {
+		switch (rs) {
+			case p_size::BYTE: return 8;
+			case p_size::WORD: return 16;
+			case p_size::DWORD: return 32;
+			default: return 64;
+		}
+	}
 
 	std::string storage::to_string(p_size rs) const {
 		switch (this->type) {
@@ -575,7 +582,7 @@ namespace x86_64 {
 
 				if (!do_prune_clobbers_total() && totalprc >= 15) return true;
 
-				std::cout << "prc: " << potential_readers.size() << "\n";
+				//std::cout << "prc: " << potential_readers.size() << "\n";
 
 				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&](const source_type &st){
 						if (!reachable_before(stmt, source_of_us, std::get<statement *>(st)) ){
@@ -823,7 +830,7 @@ namespace x86_64 {
 
 							storage new_register{newregno, stores[i].size};
 
-							std::cout << "rmap " << new_register.to_string() << " " << stores[i].to_string() << stores[i].size;
+							//std::cout << "rmap " << new_register.to_string() << " " << stores[i].to_string() << stores[i].size;
 
 							added_commands[possible] = "mov " + new_register.to_string() + ", " + stores[i].to_string() + "\n" + added_commands[possible];
 							added_registers[possible].insert(newregno);
@@ -915,6 +922,8 @@ use_register:
 							post_commands[possible] += "pop "  + storage{regno, 64}.to_string() + "\n";
 						}
 
+						if (possible->matches[i].parm != ~0) added_registers[possible].insert(regno);
+
 						if (used_registers.count(regno)) {
 							// Shuffling of the other read parameters is critical. Becuase of laziness, add a simple marker.
 							for (size_t j = i + 1; j < stores.size(); ++j) {
@@ -926,9 +935,30 @@ use_register:
 
 						// Alright, now we have to go remap it. mov into the target.
 						
-						emit("mov ", storage{regno, stores[i].size}, ", ", stores[i]);
+						if (possible->matches[i].valid_sizes.count(stores[i].get_size())) {
+							emit("mov ", storage{regno, stores[i].size}, ", ", stores[i]);
 
-						chosen_stores[possible][i] = storage{regno, stores[i].size};
+							chosen_stores[possible][i] = storage{regno, stores[i].size};
+						}
+						else {
+							// Get valid size
+							auto vsize = std::find_if(possible->matches[i].valid_sizes.begin(), possible->matches[i].valid_sizes.end(), [&](auto x){
+								return x >= stores[i].get_size();
+							});
+							if (vsize == possible->matches[i].valid_sizes.end()) {
+								added_costs[possible] = -1;
+								break;
+							}
+
+							if (stores[i].type == storage::IMM) {
+								emit("mov ", storage{regno, psize_to_n(*vsize)}, ", ", stores[i]);
+							}
+							else {
+								emit(stores[i].size == 32 ? "movsxd" : "movsx", " ", storage{regno, psize_to_n(*vsize)}, ", ", stores[i]);
+							}
+
+							chosen_stores[possible][i] = storage{regno, psize_to_n(*vsize)};
+						}
 						added_costs[possible]++;
 					}
 					else {
@@ -1086,9 +1116,9 @@ use_mem:
 		for (int i = 0; i < 14; ++i) {
 			if (ignore.count(i)) continue;
 			if (!is_clobbered_for(i, at)) {
-				std::cout << "!icf " << i << " ";
-				val_print(*at);
-				std::cout << "\n";
+				//std::cout << "!icf " << i << " ";
+				//val_print(*at);
+				//std::cout << "\n";
 				return i;
 			}
 		}
