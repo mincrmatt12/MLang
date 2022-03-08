@@ -193,6 +193,8 @@ namespace x86_64 {
 					default:
 						throw std::logic_error("Invalid size in to_string");
 				}
+			default:
+				return "<none>";
 		}
 	}
 
@@ -204,6 +206,7 @@ namespace x86_64 {
 				return "[rbp - " + std::to_string(imm_or_offset) + "]";
 			case IMM:
 			case REG:
+			default:
 				return "";
 		}
 	}
@@ -257,7 +260,7 @@ namespace x86_64 {
 
 				if (m.valid_sizes.count(get_size()) == 0) return false;
 				return true;
-				break;
+			default: return false;
 		}
 	}
 
@@ -275,6 +278,7 @@ namespace x86_64 {
 			case REG: return regno == other.regno && size == other.size;
 			case STACKOFFSET: return imm_or_offset == other.imm_or_offset && size == other.size;
 			case GLOBAL: return global == other.global;
+			default: return false;
 		}
 	}
 
@@ -545,6 +549,7 @@ namespace x86_64 {
 
 		// Get all sources, checking where they are written
 		int i = 0;
+		int totalprc = 0;
 		if (std::all_of(data_at_stmt.begin(), data_at_stmt.end(), [&](const auto &i_info){
 			bool result = std::all_of(i_info.begin(), i_info.end(), [&](const source_type& info){
 				if (std::holds_alternative<undefined_source>(info)) return true; // we don't care about undefined sources
@@ -566,6 +571,11 @@ namespace x86_64 {
 				});
 
 				if (potential_readers.size() == 0) return true;
+				totalprc += potential_readers.size();
+
+				if (!do_prune_clobbers_total() && totalprc >= 15) return true;
+
+				std::cout << "prc: " << potential_readers.size() << "\n";
 
 				if (reachable(source_of_us, stmt) && std::any_of(potential_readers.begin(), potential_readers.end(), [&](const source_type &st){
 						if (!reachable_before(stmt, source_of_us, std::get<statement *>(st)) ){
@@ -753,14 +763,20 @@ namespace x86_64 {
 							// IN THIS CASE: we need to use a mov, because it is memory, and if it was REGMEM it would have been matches.
 							// The register, however, isn't always defined. If it isn't, find one.
 							int reg = wparam.parm != ~0 ? wparam.parm : get_clobber_register(stmt, important_registers);
-							// Add to clobber
-							added_registers[possible].insert(reg);
-							// Emit a mov
-							emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
-							// Add _2_ to cost
-							added_costs[possible] += 2;
-							// Mark cosen storage location
-							chosen_stores[possible][0] = storage{reg, stores[0].size};
+							if (reg == -1) {
+								added_costs[possible] = -1;
+								continue;
+							}
+							else {
+								// Add to clobber
+								added_registers[possible].insert(reg);
+								// Emit a mov
+								emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
+								// Add _2_ to cost
+								added_costs[possible] += 2;
+								// Mark cosen storage location
+								chosen_stores[possible][0] = storage{reg, stores[0].size};
+							}
 						}	
 						else {
 							// Otherwise, it's an immediate, which is impossible, so throw an error.
@@ -882,6 +898,22 @@ namespace x86_64 {
 use_register:
 						std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
 						int regno = possible->matches[i].parm != ~0 ? possible->matches[i].parm : get_clobber_register(stmt, used_registers);
+
+						if (regno == -1) {
+							// Fabricate a clobberable register
+							for (regno = 0; regno < 14; ++regno) {
+								if (used_registers.count(regno)) continue;
+								break;
+							}
+							if (regno == 15) {
+								added_costs[possible] = -1;
+								break;
+							}
+
+							// push and pop it
+							added_commands[possible] = "push " + storage{regno, 64}.to_string() + "\n" + added_commands[possible];
+							post_commands[possible] += "pop "  + storage{regno, 64}.to_string() + "\n";
+						}
 
 						if (used_registers.count(regno)) {
 							// Shuffling of the other read parameters is critical. Becuase of laziness, add a simple marker.

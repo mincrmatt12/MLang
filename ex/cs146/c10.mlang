@@ -1,0 +1,31 @@
+#include stdlib.mlang
+
+do_it(32 low, 32 hi) = {
+	var 32 cur = low - 1;
+	while (cur <= hi) {
+		cur = cur + 1;
+
+		// compute reverse
+		var 32 rev = 0;
+		var 32 cbac = cur;
+
+		while (cur) {
+			rev = (rev * 10) + cur % 10;
+			cur = cur / 10;
+		}
+
+		cur = cbac;
+		if (cur == rev) {
+			// is it squarefree
+			var 32 i = 2; 
+			while (i < cur && i < 46339 && i*i % cur != 0) i = i + 1;
+			if (i >= cur || i >= 46339 || i*i % cur != 0) printf("%d\n", cur);
+		}
+	}
+}
+
+// test main
+main() = {
+	do_it(10, 1000);
+	return 0;
+}

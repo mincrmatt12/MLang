@@ -1,8 +1,6 @@
 #include strlib.mlang
 #include stdlib.mlang
 
-// Every bloody thing in mlang is a god-damn allocation.
-
 static 8 * in_str = null;
 static 64  str_len = 0;
 static 64  position = 0;

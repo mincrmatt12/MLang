@@ -11,3 +11,5 @@ extern malloc<64 *>(64 size);
 extern memset<64>(64 * ptr, 8 value, 64 length);
 extern free(64 * ptr);
 extern realloc<64 *>(64 * ptr, 64 size);
+
+extern strcmp<32>(8 * a, 8 * b);
