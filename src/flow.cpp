@@ -72,7 +72,9 @@ inline bool reachable_before_v(statement * start, statement * before, statement 
 		// Are we at a conditional
 		if (at->cond != nullptr) {
 			// Recurse
-			return reachable_before_v(at->next, before, after, seen, steps, prevfoundstep) && reachable_before_v(at->cond, before, after, seen, steps, prevfoundstep);
+			if (!reachable_before_v(at->next, before, after, seen, steps, prevfoundstep)) return false;
+			seen.insert(at->next);
+			return reachable_before_v(at->cond, before, after, seen, steps, prevfoundstep);
 		}
 		// Otherwise, continue tracking along
 		else {
