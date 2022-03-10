@@ -409,7 +409,7 @@ namespace yy {mlang_parser::symbol_type yylex(parsecontext &ctx); }
 %token STR_CONST INT_LITERAL CHAR_LITERAL IDENTIFIER
 
 %left ','
-%right '?' ':' '=' "+=" "-=" "*=" "/="
+%right '?' ':' '=' "+=" "-=" "*=" "/=" "%="
 %left "||"
 %right "th" "else"
 %left "&&"
@@ -542,6 +542,8 @@ expr: STR_CONST				{ $$ = interpret_literal(M($1));}
     					  else {$$ = C($1) %= e_mul(C($1), M($3)); }}
     | expr "/=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_div(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
     					  else {$$ = C($1) %= e_div(C($1), M($3)); } }
+    | expr "%=" expr			{ ensure_cast($3, $1, true); if ($1.has_side_effects()) {auto a = ctx.temp(M(ex_rtype($1.get_type(), true))) %= e_addr(M($1)); $$ = e_comma(C(a), e_mod(e_deref(a.params.back()), M($3)) %= e_deref(a.params.back()));}
+    					  else {$$ = C($1) %= e_mod(C($1), M($3)); } }
     | expr "||" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_or(M($1), M($3));}
     | expr "&&" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_l_and(M($1), M($3));}
     | expr "==" expr			{ ensure_cast($1, $3); ensure_cast($3, $1); $$ = e_eq(M($1), M($3)); }

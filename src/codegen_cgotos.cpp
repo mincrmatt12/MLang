@@ -1,6 +1,23 @@
 #include "codegen.h"
+#include <sstream>
 
 namespace cgotos {
+	std::string encode_string(const std::string &str_table) {
+		std::stringstream result;
+		for (char c : str_table) {
+			if (c == '\n') result << "\\n";
+			else if (c == '\t') result << "\\t";
+			else if (c == '"') result << "\\\"";
+			else if (c == '\f') result << "\\f";
+			else if (c == '\\') result << "\\\\";
+			else if (isprint(c)) result << c;
+			else {
+				result << std::oct << "\\" << (c < 0100 ? "0" : "") << (c < 010 ? "0" : "") << int{c};
+			}
+		}
+		return '"' + result.str() + '"';
+	}
+
 	std::string codegenerator::ctypeof(const ex_rtype& er) {
 		if (er.ptr) return ctypeof(*er.ptr) + "*";
 		else {
@@ -36,7 +53,7 @@ namespace cgotos {
 			this->functions.emplace_back(std::move(f), nm);
 		}
 
-		this->string_table = tctx.string_table;
+		this->string_table = encode_string(tctx.string_table);
 	}
 
 	std::string codegenerator::generate() {
@@ -193,7 +210,7 @@ namespace cgotos {
 				emit(cnameof(stmt->lhs()), " = &(", cnameof(stmt->rhs()), ");");
 				break;
 			case st_type::str:
-				emit(cnameof(stmt->lhs()), " = STRINGS;");
+				emit(cnameof(stmt->lhs()), " = ", this->string_table, ";");
 				break;
 			case st_type::stackoff:
 				throw std::logic_error("no stackoffs");

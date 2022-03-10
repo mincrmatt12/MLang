@@ -75,6 +75,7 @@ namespace x86_64 {
 		std::set<type> valid_types;
 		std::set<p_size> valid_sizes;
 		int parm;
+		std::set<int> earlyclobbers{};
 	};
 
 	extern const char * registers[4][14];

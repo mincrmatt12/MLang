@@ -19,20 +19,23 @@ namespace x86_64 {
 
 	const std::array<int, 5> calle_saved = {7, 10, 11, 12, 13};
 
-#define AnyS      {p_size::BYTE, p_size::WORD, p_size::DWORD, p_size::QWORD}
-#define WordS     {p_size::WORD, p_size::DWORD, p_size::QWORD}
-#define DWordS    {p_size::DWORD, p_size::QWORD}
-#define MDWordS   {p_size::BYTE, p_size::WORD, p_size::DWORD}
-#define MWordS    {p_size::BYTE, p_size::WORD}
-#define SameAs(x) {{match_t::SAMEAS}, {}, x}
-#define Reg(x, s) {{match_t::REG}, s, x}
-#define AnyReg(s) {{match_t::REG}, s, ~0}
-#define RegMem(s) {{match_t::REG, match_t::MEM}, s, ~0}
-#define Any(s)	  {{match_t::REG, match_t::MEM, match_t::IMM}, s, ~0}
-#define RegImm(s) {{match_t::REG, match_t::IMM}, s, ~0}
-#define Imm(s)    {{match_t::IMM}, s, ~0}
-#define Mem(s)    {{match_t::MEM}, s, ~0}
-#define Const(x)  {{match_t::CONSTIMM}, AnyS, x}
+#define AnyS                 {p_size::BYTE, p_size::WORD, p_size::DWORD, p_size::QWORD}
+#define WordS                {p_size::WORD, p_size::DWORD, p_size::QWORD}
+#define DWordS               {p_size::DWORD, p_size::QWORD}
+#define MDWordS              {p_size::BYTE, p_size::WORD, p_size::DWORD}
+#define MWordS               {p_size::BYTE, p_size::WORD}
+
+#define SameAs(x)            {{match_t::SAMEAS}, {}, x}
+#define Reg(x, s)            {{match_t::REG}, s, x}
+#define AnyReg(s)            {{match_t::REG}, s, ~0}
+#define RegMem(s)            {{match_t::REG, match_t::MEM}, s, ~0}
+#define Any(s)	             {{match_t::REG, match_t::MEM, match_t::IMM}, s, ~0}
+#define RegImm(s)            {{match_t::REG, match_t::IMM}, s, ~0}
+#define Imm(s)               {{match_t::IMM}, s, ~0}
+#define Mem(s)               {{match_t::MEM}, s, ~0}
+#define Const(x)             {{match_t::CONSTIMM}, AnyS, x}
+#define RegMemExcept(s, ...) {{match_t::REG, match_t::MEM}, s, ~0, {__VA_ARGS__}}
+#define RegExcept(s, ...)    {{match_t::REG}, s, ~0, {__VA_ARGS__}}
 
 	const recipe recipes[] = {
 		/* NOP */
@@ -78,9 +81,9 @@ namespace x86_64 {
 		{ 8, st_type::div,  "shr %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
         /* MOD */
 		{ 9, st_type::mod,  "idiv %0 | shr ax, 8", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
-		{10, st_type::mod,  "cwd | idiv %2", {Reg(2, {p_size::WORD}), Reg(6, {p_size::WORD}), RegMem({p_size::WORD})}},
-		{10, st_type::mod,  "cdq | idiv %2", {Reg(2, {p_size::DWORD}), Reg(6, {p_size::DWORD}), RegMem({p_size::DWORD})}},
-		{10, st_type::mod,  "cqo | idiv %2", {Reg(2, {p_size::QWORD}), Reg(6, {p_size::QWORD}), RegMem({p_size::QWORD})}},
+		{10, st_type::mod,  "cwd | idiv %2", {Reg(2, {p_size::WORD}), Reg(6, {p_size::WORD}), RegMemExcept({p_size::WORD}, 2)}},
+		{10, st_type::mod,  "cdq | idiv %2", {Reg(2, {p_size::DWORD}), Reg(6, {p_size::DWORD}), RegMemExcept({p_size::DWORD}, 2)}},
+		{10, st_type::mod,  "cqo | idiv %2", {Reg(2, {p_size::QWORD}), Reg(6, {p_size::QWORD}), RegMemExcept({p_size::QWORD}, 2)}},
 		/* NEG */
 		{10, st_type::neg,  "neg %0", {RegMem(AnyS), SameAs(0)}},
 		{11, st_type::neg,  "imul %0, %1, -1", {AnyReg(AnyS), RegMem(AnyS)}},
@@ -256,6 +259,7 @@ namespace x86_64 {
 
 				if (m.parm != ~0 && m.parm != regno) return false;
 				if (m.valid_sizes.count(get_size()) == 0) return false;
+				if (m.earlyclobbers.count(regno)) return false;
 				return true;
 			case STACKOFFSET:
 				if (m.valid_types.count(match_t::MEM) == 0) return false;
@@ -647,7 +651,9 @@ namespace x86_64 {
 							return true;
 					}
 				}
-				else return a.matches(b, stores);
+				else {
+					return a.matches(b, stores);
+				}
 			})) {
 
 				considered_set.push_back(&possible);
@@ -717,7 +723,7 @@ namespace x86_64 {
 					post_commands[possible] = {}; // make sure it exists, since we use &
 					auto emit = emitter(post_commands[possible]);
 					if (wparam.valid_types.count(match_t::REG)) {
-						if (stores[0].type == storage::REG) {
+						if (stores[0].type == storage::REG && wparam.parm != ~0) {
 							// IN THIS CASE: we need to use a mov, because it is a register (if it was REGMEM it would have been matched earlier, therefore the only case is reg(:something)
 							// Emit a mov
 							emit("mov ", stores[0], ", ", storage{wparam.parm, stores[0].size});
@@ -728,6 +734,7 @@ namespace x86_64 {
 							// Mark changed storage
 							chosen_stores[possible][0] = storage{wparam.parm, stores[0].size};
 						}	
+						// TODO: use a different free register if reg exclude exists (shouldn't really happen for writes though)
 						else if (stores[0].type == storage::STACKOFFSET || stores[0].type == storage::GLOBAL) {
 							// IN THIS CASE: we need to use a mov, because it is memory, and if it was REGMEM it would have been matches.
 							// The register, however, isn't always defined. If it isn't, find one.
@@ -859,13 +866,14 @@ namespace x86_64 {
 						}
 					}
 					// Check if it should be either register or memory and jump to appropriate block
-					else if (possible->matches[i].valid_types.count(match_t::MEM) && possible->matches[i].valid_types.count(match_t::REG)) {
+					/*else if (possible->matches[i].valid_types.count(match_t::MEM) && possible->matches[i].valid_types.count(match_t::REG)) {
 						if (get_clobber_register(stmt) != -1) goto use_register;
 						else 	                    		  goto use_mem;
-					}
+					}*/
 					else if (possible->matches[i].valid_types.count(match_t::REG)) {
 use_register:
 						std::set<int> used_registers = important_registers; used_registers.merge(std::set<int>(added_registers[possible]));
+						used_registers.merge(std::set<int>(possible->matches[i].earlyclobbers));
 						int regno = possible->matches[i].parm != ~0 ? possible->matches[i].parm : get_clobber_register(stmt, used_registers);
 
 						if (regno == -1) {

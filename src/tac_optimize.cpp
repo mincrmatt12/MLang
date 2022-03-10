@@ -388,12 +388,17 @@ int  tacoptimizecontext::optimize_copyelision() {
 					if (!std::holds_alternative<statement *>(source)) return;
 					if (std::get<statement *>(source) != s) return;
 				}
+				for (auto &potential_block : compareval) {
+					if (!std::holds_alternative<statement *>(potential_block)) return;
+					auto potential_bstmt = std::get<statement *>(potential_block);
+					if (potential_bstmt == s) continue;
+					if (reachable_before(s, potential_bstmt, r)) return;
+				}
 			}
 
 			// Alright. We are good to go.
 			DUMP_T std::cout << "copy elision (type 2, write) " << reg.num << "->" << compare.num << std::endl;
 			//print_statement_list(optimizing->start);
-			DUMP_T std::cout << "after \n";
 			reg = compare;
 			for (auto &r : readers) r->make_nop();
 			//print_statement_list(optimizing->start);
