@@ -73,9 +73,9 @@ namespace x86_64 {
 		{ 9, st_type::mul,  "shl %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
 		/* DIV */
 		{ 9, st_type::div,  "idiv %0 | xor ah, ah", {Reg(6, {p_size::BYTE}), SameAs(0), RegMem({p_size::BYTE})}},
-		{10, st_type::div,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), SameAs(0), RegMem({p_size::WORD})}, {2}},
-		{10, st_type::div,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), SameAs(0), RegMem({p_size::DWORD})}, {2}},
-		{10, st_type::div,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), SameAs(0), RegMem({p_size::QWORD})}, {2}},
+		{10, st_type::div,  "cwd | idiv %2", {Reg(6, {p_size::WORD}), SameAs(0), RegMemExcept({p_size::WORD}, 2)}, {2}},
+		{10, st_type::div,  "cdq | idiv %2", {Reg(6, {p_size::DWORD}), SameAs(0), RegMemExcept({p_size::DWORD}, 2)}, {2}},
+		{10, st_type::div,  "cqo | idiv %2", {Reg(6, {p_size::QWORD}), SameAs(0), RegMemExcept({p_size::QWORD}, 2)}, {2}},
 		{ 8, st_type::div,  "shr %0, 1", {RegMem(AnyS), SameAs(0), Const(2)}},
 		{ 8, st_type::div,  "shr %0, 2", {RegMem(AnyS), SameAs(0), Const(4)}},
 		{ 8, st_type::div,  "shr %0, 3", {RegMem(AnyS), SameAs(0), Const(8)}},
@@ -113,11 +113,11 @@ namespace x86_64 {
 		{13, st_type::write, "mov dword [%0], %1", {RegImm(AnyS), Imm(DWordS)}},
 		{14, st_type::write, "mov qword [%0], %1", {RegImm(AnyS), Imm(AnyS)}},
 		/* EQ */
-		{10, st_type::eq,   "cmp %1, %2 | sete %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::eq,   "cmp %2, %1 | sete %b0 ", {RegMem(AnyS), RegImm(AnyS), RegMem(AnyS)}},
+		{10, st_type::eq,   "cmp %1, %2 | sete %b0 | movzx %0, %b0", {AnyReg(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::eq,   "cmp %2, %1 | sete %b0 | movzx %0, %b0", {AnyReg(AnyS), RegImm(AnyS), RegMem(AnyS)}},
 		/* GT */
-		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), RegMem(AnyS), RegImm(AnyS)}},
-		{10, st_type::gt,   "cmp %1, %2 | setg %b0 ", {RegMem(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 | movzx %0, %b0", {AnyReg(AnyS), RegMem(AnyS), RegImm(AnyS)}},
+		{10, st_type::gt,   "cmp %1, %2 | setg %b0 | movzx %0, %b0", {AnyReg(AnyS), AnyReg(AnyS), RegMem(AnyS)}},
 		/* CAST */
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(WordS), RegMem({p_size::BYTE})}},
 		{10, st_type::cast, "movsx %0, %1", {AnyReg(DWordS), RegMem({p_size::WORD})}},
@@ -740,19 +740,26 @@ namespace x86_64 {
 							// The register, however, isn't always defined. If it isn't, find one.
 							int reg = wparam.parm != ~0 ? wparam.parm : get_clobber_register(stmt, important_registers);
 							if (reg == -1) {
-								added_costs[possible] = -1;
-								continue;
+								// Fabricate a clobberable register
+								for (reg = 0; reg < 14; ++reg) {
+									if (added_registers[possible].count(reg) || important_registers.count(reg)) continue;
+									added_costs[possible] += 1;
+									break;
+								}
+								if (reg == 14) {
+									added_costs[possible] = -1;
+									continue;
+								}
 							}
-							else {
-								// Add to clobber
-								added_registers[possible].insert(reg);
-								// Emit a mov
-								emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
-								// Add _2_ to cost
-								added_costs[possible] += 2;
-								// Mark cosen storage location
-								chosen_stores[possible][0] = storage{reg, stores[0].size};
-							}
+
+							// Add to clobber
+							added_registers[possible].insert(reg);
+							// Emit a mov
+							emit("mov ", stores[0], ", ", storage{reg, stores[0].size});
+							// Add _2_ to cost
+							added_costs[possible] += 2;
+							// Mark cosen storage location
+							chosen_stores[possible][0] = storage{reg, stores[0].size};
 						}	
 						else {
 							// Otherwise, it's an immediate, which is impossible, so throw an error.
@@ -882,7 +889,7 @@ use_register:
 								if (used_registers.count(regno)) continue;
 								break;
 							}
-							if (regno == 15) {
+							if (regno == 14) {
 								added_costs[possible] = -1;
 								break;
 							}

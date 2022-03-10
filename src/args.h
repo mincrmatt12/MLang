@@ -24,8 +24,8 @@ o(1, 1, 1, ast_logic_constfold, 3) \
 o(1, 1, 1, remove_nops, 4) \
 o(0, 1, 1, remove_deadstores, 5) \
 o(0, 0, 1, deduplicate, 6) \
-o(0, 1, 1, copy_elide_read, 7) \
-o(0, 0, 1, copy_elide_write, 8) \
+o(1, 1, 1, copy_elide_read, 7) \
+o(0, 1, 1, copy_elide_write, 8) \
 o(0, 1, 1, simplify_useless_casts, 9) \
 o(0, 1, 1, replace_literal_params, 10) \
 o(1, 1, 1, replace_ifnz_literals, 11) \
@@ -38,8 +38,8 @@ o(0, 1, 1, tac_logic_constfold, 17) \
 o(0, 1, 1, canonize_ifnz, 18) \
 o(1, 1, 1, remove_useless_mov, 19) \
 o(1, 1, 1, remove_fcall_result_cast, 20) \
-o(0, 1, 1, rename_registers, 21) \
-o(0, 1, 1, remap_registers, 22) \
+o(0, 0, 1, rename_registers, 21) \
+o(1, 1, 1, remap_registers, 22) \
 o(0, 1, 1, prune_clobbers, 23) \
 o(0, 0, 1, remove_stackops, 24) \
 o(0, 0, 1, prune_clobbers_total, 25)
