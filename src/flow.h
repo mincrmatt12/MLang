@@ -48,7 +48,6 @@ private:
 		if (!changes) return;
 
 		if (follow_copies && si_mov(*where)) {
-
 			// make sure both arguments are registers
 			if (ai_reg(where->lhs()) && ai_reg(where->rhs())) {
 				state[where->lhs().num] = state[where->rhs().num];
@@ -61,59 +60,58 @@ private:
 				state[where->lhs().num] = {where};
 			}
 		}
-		else {
-			int i = 0;
-			where->for_all_write([&](auto){++i;});
-			where->for_all_read([&](auto &reg) {
-					int index = i++;
 
-					if (!ai_reg(reg)) return;
-					int regno = reg.num;
-					changes += std::count_if(state[regno].begin(), state[regno].end(), [&](const auto& source){
-							auto writer_ = std::get_if<statement *>(&source);
-							statement * writer = writer_ == nullptr ? nullptr : *writer_;
-							int i2 = 0;
+		int i = 0;
+		where->for_all_write([&](auto){++i;});
+		where->for_all_read([&](auto &reg) {
+				int index = i++;
 
-							if (writer != nullptr) {
-								writer->for_all_write([&](auto &reg2){
-									int index2 = i2++;
-									if (reg2 == reg) {
-										++changes;
-										data[writer].parameters[index2].insert(where);
-									}
-								});
-								if (si_addrof(*writer) && ai_reg(writer->rhs())) {
-									if (si_write(*where) || si_fcall(*where)) {
-										// This is an interesting situation, we have to make it look like it happened.
-										state[writer->rhs().num] = {writer};
-										++changes;
-									}
-									if (si_read(*where)) {
-										// Attempt to find the source
-										for (const auto& ws_source : data[writer].everything[1]) {
-											if (std::holds_alternative<statement *>(ws_source)) {
-												auto writer_squared = std::get<statement *>(ws_source);
-												writer_squared->for_all_write([&, i3=0](auto &reg2) mutable {
-													int index3 = i3++;
-													if (reg2 == where->rhs()) {
-														++changes;
-														data[writer_squared].parameters[index3].insert(writer);
-													}
-												});
-											}
+				if (!ai_reg(reg)) return;
+				int regno = reg.num;
+				changes += std::count_if(state[regno].begin(), state[regno].end(), [&](const auto& source){
+						auto writer_ = std::get_if<statement *>(&source);
+						statement * writer = writer_ == nullptr ? nullptr : *writer_;
+						int i2 = 0;
+
+						if (writer != nullptr) {
+							writer->for_all_write([&](auto &reg2){
+								int index2 = i2++;
+								if (reg2 == reg) {
+									++changes;
+									data[writer].parameters[index2].insert(where);
+								}
+							});
+							if (si_addrof(*writer) && ai_reg(writer->rhs())) {
+								if (si_write(*where) || si_fcall(*where)) {
+									// This is an interesting situation, we have to make it look like it happened.
+									state[writer->rhs().num] = {writer};
+									++changes;
+								}
+								if (si_read(*where)) {
+									// Attempt to find the source
+									for (const auto& ws_source : data[writer].everything[1]) {
+										if (std::holds_alternative<statement *>(ws_source)) {
+											auto writer_squared = std::get<statement *>(ws_source);
+											writer_squared->for_all_write([&, i3=0](auto &reg2) mutable {
+												int index3 = i3++;
+												if (reg2 == where->rhs()) {
+													++changes;
+													data[writer_squared].parameters[index3].insert(writer);
+												}
+											});
 										}
 									}
 								}
 							}
+						}
 
-							return mydata.parameters[index].insert(source).second;
-					});
-			});
-			if (!changes) return;
-			where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
+						return mydata.parameters[index].insert(source).second;
+				});
+		});
+		if (!changes) return;
+		where->for_all_write([&](auto &reg){ if (ai_reg(reg)) state[reg.num] = { where };});
 
-			if (include_ifnz && si_if(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
-		}
+		if (include_ifnz && si_if(*where) && ai_reg(where->lhs())) {state[where->lhs().num] = {where};}
 
 		if (where->cond != nullptr) {
 			trace(where->cond, where->next == nullptr ? std::move(state) : access_data::state_type(state), follow_copies, include_ifnz);
