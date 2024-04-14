@@ -1,6 +1,6 @@
 #include <numeric>
+#include <ranges>
 #include "stringify.h"
-#include "transform_iterator.h"
 
 #define DUMP_T if(dumplevel >= 2)
 
@@ -59,7 +59,8 @@ void astoptimizecontext::find_pure_funcs() {
 
 void astoptimizecontext::optimize() {
 	this->find_pure_funcs();
-	this->optimize_iterator(make_transform_iterator(this->functions.begin(), this->functions.end(), [&](function &e) -> auto& {return e.code;}), transform_iterator<expression &>());
+	auto func_codes = this->functions | std::views::transform([&](function &e) -> auto& {return e.code;});
+	this->optimize_iterator(func_codes.begin(), func_codes.end());
 	this->optimize_iterator(this->global_inits.begin(), this->global_inits.end());
 	if (dumplevel != 0) std::cout << "optimized" << std::endl;
 }	
