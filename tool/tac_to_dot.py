@@ -12,6 +12,11 @@ def read_instructions():
     for line in sys.stdin:
         line = line[:-1]
         if line.startswith("  "):
+            if " :: " in line:
+                _, _, line = line.partition(" :: ")
+                line = "  " + line
+            if "\t" in line:
+                line = line[:line.index("\t")]
             instructions += line + "\n"
         if line.startswith("  jmp"):
             # grab the label

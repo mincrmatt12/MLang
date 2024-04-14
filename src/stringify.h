@@ -13,7 +13,7 @@
 #include "compiler.h"
 #include "tac_optimize.h"
 #include "args.h"
-#include "codegen.h"
+#include "flow.h"
 
 struct tree_toggle_t {
 	bool yes;
@@ -95,7 +95,7 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 		case ex_type::cast:		val_print(e.castvalue); break;
 		default:		  break;
 	}
-	std::cout << std::endl;
+	std::cout << '\n';
 	++depth;
 	int car = e.params.size();
 	for (const auto &l : e.params) {
@@ -108,58 +108,58 @@ static void print_tree(const expression &e, int depth=0, tree_toggle_t * head=nu
 
 static void debug_dump_ctx(parsecontext& ctx) {
 	if (dumplevel == 0) return;
-	std::cout << "=== external functions ===" << std::endl;
+	std::cout << "=== external functions ===" << '\n';
 	for (const auto &e : ctx.ext_list) {
 		std::cout << e.name << "(";
 		for (int c = 0; c < e.num_args; c++) std::cout << "P" << c << ",";
 		if (e.varargs) std::cout << "...)";
 		else std::cout << ")";
-		std::cout << std::endl << std::endl;
+		std::cout << '\n' << '\n';
 	}
 
-	std::cout << "=== global vars & inits ===" << std::endl;
-	std::cout << ctx.num_globals << std::endl;
+	std::cout << "=== global vars & inits ===" << '\n';
+	std::cout << ctx.num_globals << '\n';
 	for (int i = 0; i < ctx.num_globals; i++) {
-		std::cout << "$G" << i << ":" << std::endl;
+		std::cout << "$G" << i << ":" << '\n';
 		print_tree(ctx.global_initializers[i]);
-		std::cout << std::endl;
+		std::cout << '\n';
 	}
 
-	std::cout << "=== functions ===" << std::endl;
+	std::cout << "=== functions ===" << '\n';
 	for (const auto &f : ctx.func_list) {
 		std::cout << f.name << "(";
 		for (int c = 0; c < f.num_args; c++) std::cout << "P" << c << ",";
-		std::cout << "): " << std::endl;
-		std::cout << "= code =" << std::endl;
+		std::cout << "): " << '\n';
+		std::cout << "= code =" << '\n';
 		print_tree(f.code);
 	}
 }
 
 static void debug_dump_ctx(astoptimizecontext& ctx) {
 	if (dumplevel == 0) return;
-	std::cout << "=== external functions ===" << std::endl;
+	std::cout << "=== external functions ===" << '\n';
 	for (const auto &e : ctx.ext_functions) {
 		std::cout << e.name << "(";
 		for (int c = 0; c < e.num_args; c++) std::cout << "P" << c << ",";
 		if (e.varargs) std::cout << "...)";
 		else std::cout << ")";
-		std::cout << std::endl << std::endl;
+		std::cout << '\n' << '\n';
 	}
 
-	std::cout << "=== global vars & inits ===" << std::endl;
+	std::cout << "=== global vars & inits ===" << '\n';
 	int count = 0;
 	for (const auto &v : ctx.global_inits) {
-		std::cout << "$G" << count << ":" << std::endl;
+		std::cout << "$G" << count << ":" << '\n';
 		++count;
 		print_tree(v);
 	}
 
-	std::cout << "=== functions ===" << std::endl;
+	std::cout << "=== functions ===" << '\n';
 	for (const auto &f : ctx.functions) {
 		std::cout << f.name << "(";
 		for (int c = 0; c < f.num_args; c++) std::cout << "P" << c << ",";
-		std::cout << "): " << std::endl;
-		std::cout << "= code =" << std::endl;
+		std::cout << "): " << '\n';
+		std::cout << "= code =" << '\n';
 		print_tree(f.code);
 	}
 }
@@ -199,7 +199,7 @@ static void val_print(const statement &s) {
 	}
 }
 
-static void print_statement_list(statement * start) {
+static void print_statement_list(statement * start, const access_info *extra_info=nullptr) {
 	auto indices = std::map<statement *, int>{}; // Get the canonical order of all of these things.
 	auto labels  = std::map<int, int>{};
 	auto trav    = std::map<int, statement *>{};
@@ -233,17 +233,70 @@ static void print_statement_list(statement * start) {
 	// Now, print all of the statements, optionally adding labels and jumps
 	for (auto &[index, st] : trav) {
 		if (labels.count(index) != 0) {
-			std::cout << ".L" << labels[index] << ":" << std::endl;
+			std::cout << ".L" << labels[index] << ":" << '\n';
 		}
 		std::cout << "  ";
+		if (extra_info) {
+			std::cout << 'S' << index << " :: ";
+		}
 		val_print(*st);
 		if (st->cond != nullptr) {
 			std::cout << " .L" << labels[indices[st->cond]];
 		}
-		std::cout << std::endl;
+		if (extra_info && extra_info->data.contains(st)) {
+			const auto& dat = extra_info->data.at(st);
+			std::cout << "\t";
+			/*
+			st->for_all_read([&](const addr_ref& arg){
+				if (ai_reg(arg)) {
+					const auto& srcs = dat.everything[arg.num];
+					std::cout << "R" << arg.num << "={";
+					for (auto& src : srcs) {
+						std::visit([&](auto entry){
+							if constexpr (std::is_same_v<decltype(entry), parameter_source>) {
+								std::cout << "P" << entry << ",";
+							}
+							else if constexpr (std::is_same_v<decltype(entry), statement *>) {
+								if (indices.contains(entry)) {
+									std::cout << "S" << indices.at(entry) << ",";
+								}
+							}
+							else
+								std::cout << "?,";
+						}, src);
+					}
+					std::cout << "} ";
+				}
+			});
+			*/
+
+			int k = 0;
+			for (const auto& srcs : dat.parameters) {
+				if (ai_reg(st->params[k])) {
+					std::cout << "R" << st->params[k].num << "={";
+					for (auto& src : srcs) {
+						std::visit([&](auto entry){
+							if constexpr (std::is_same_v<decltype(entry), parameter_source>) {
+								std::cout << "P" << entry << ",";
+							}
+							else if constexpr (std::is_same_v<decltype(entry), statement *>) {
+								if (indices.contains(entry)) {
+									std::cout << "S" << indices.at(entry) << ",";
+								}
+							}
+							else
+								std::cout << "?,";
+						}, src);
+					}
+					std::cout << "} ";
+				}
+				++k;
+			}
+		}
+		std::cout << '\n';
 		if (st->next != nullptr) {
 			if (indices[st->next] != index+1) {
-				std::cout << "  jmp .L" << labels[indices[st->next]] << std::endl;
+				std::cout << "  jmp .L" << labels[indices[st->next]] << '\n';
 			}
 		}
 	}
@@ -255,15 +308,15 @@ static void debug_dump_ctx(compiler &ctx) {
 	
 	for (auto &[name, stp] : ctx.func_compileunits) {
 		if (stp.start == nullptr) continue;
-		std::cout << name << ":" << std::endl;
+		std::cout << name << ":" << '\n';
 		if (stp.array_block_size) {
-			std::cout << "  ; array size = " << stp.array_block_size << std::endl;
+			std::cout << "  ; array size = " << stp.array_block_size << '\n';
 		}
 		print_statement_list(stp.start);
 		
 	}
 
-	std::cout << "$GLOBAL:" << std::endl;
+	std::cout << "$GLOBAL:" << '\n';
 	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
 }
 
@@ -273,14 +326,15 @@ static void debug_dump_ctx(tacoptimizecontext &ctx) {
 	
 	for (auto &[name, stp] : ctx.func_compileunits) {
 		if (stp.start == nullptr) continue;
-		std::cout << name << ":" << std::endl;
+		std::cout << name << ":" << '\n';
 		if (stp.array_block_size) {
-			std::cout << "  ; array size = " << stp.array_block_size << std::endl;
+			std::cout << "  ; array size = " << stp.array_block_size << '\n';
 		}
-		print_statement_list(stp.start);
+		auto datums = access_info(stp, false, false);
+		print_statement_list(stp.start, &datums);
 	}
 
-	std::cout << "$GLOBAL:" << std::endl;
+	std::cout << "$GLOBAL:" << '\n';
 	if (ctx.global_initscope.start != nullptr) print_statement_list(ctx.global_initscope.start);
 }
 
