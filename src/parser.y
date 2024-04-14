@@ -12,6 +12,7 @@
 #include <vector>
 #include <list>
 #include <algorithm>
+#include <utility>
 
 #define ENUM_IDENTIFIER_TYPES(o) \
 	o(undefined)		/* unknown type */ \

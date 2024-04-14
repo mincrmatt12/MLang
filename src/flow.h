@@ -16,7 +16,7 @@
 // because of this, the access crap only needs to deal with registers.
 
 using parameter_source = std::size_t;
-using undefined_source = std::nullptr_t;
+using undefined_source = std::monostate;
 using source_type      = std::variant<undefined_source, parameter_source, statement *>;
 
 struct access_data {

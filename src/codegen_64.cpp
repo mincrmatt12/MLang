@@ -1,6 +1,7 @@
 #include "codegen.h"
 #include "stringify.h"
 #include <regex>
+#include <array>
 
 namespace x86_64 {
 	const char * registers[4][14] = {
