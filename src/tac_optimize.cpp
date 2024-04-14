@@ -219,7 +219,7 @@ int  tacoptimizecontext::optimize_copyelision() {
 	//
 	// becomes
 	// ... ... 1
-	info = access_info(*optimizing, true, true);
+	info = access_info(*optimizing, true, false);
 
 	// Now, lets remove any reads to a register where the ony source of the register is a mov where the rhs is a literal
         if (do_replace_literal_params()) traverse_f(optimizing->start, [&](statement *s){
@@ -234,12 +234,12 @@ int  tacoptimizecontext::optimize_copyelision() {
 
 				if (d.size() == 0) return; // Must be at least one source
 				if (!std::all_of(d.begin(), d.end(), [&](auto &source){return std::holds_alternative<statement *>(source);})) return; // Must all be statements
-				long last = ~0;
+				long last = 0; bool first = true;
 				if (!std::all_of(d.begin(), d.end(), [&](auto &source){
 							// Make sure that a) this is a mov and b) it's arg is a literal and c) the literal is equal for the first statement
 							statement * s2 = *std::get_if<statement *>(&source);
 							if (si_fcall(*s) && si_mov(*s2) && ai_num(s2->rhs()) && s2->rhs().rt.ptr != nullptr) return false;
-							return si_mov(*s2) && ai_num(s2->rhs()) && s2->rhs().num == (last == ~0 ? (last = s2->rhs().num) : last);
+							return si_mov(*s2) && ai_num(s2->rhs()) && s2->rhs().num == (first ? (first = false, last = s2->rhs().num) : last);
 				})) return;
 				// OK! The only sources of this register all agree on one constant literal.
 				// Replace our parameter with that literal.
@@ -249,8 +249,8 @@ int  tacoptimizecontext::optimize_copyelision() {
 			});
 	});
 
-	info = access_info(*optimizing, true, true); // Now, lets do it all again but with ifnz following
 	if (do_replace_ifnz_literals()) traverse_f(optimizing->start, [&](statement *s){
+			info = access_info(*optimizing, true, true); // Now, lets do it all again but with ifnz following
 			int i = 0;
 			s->for_all_write([&](auto){ ++i; });
 			s->for_all_read([&](auto &reg){
@@ -375,26 +375,34 @@ int  tacoptimizecontext::optimize_copyelision() {
 			addr_ref compare = readers[0]->lhs();
 			if (ai_num(compare)) return;
 			if (!std::all_of(readers.begin(), readers.end(), [&](auto &r){return r->lhs() == compare;})) return;
-			
-			// Record the first reader's values for compare to check they all hold the same value.
-			auto compareval = info.data[s].everything[compare.num];
 
 			// Alright, we may be ok. The last thing we need to check is that all of these readers' sources are equal to s
 			for (auto &r : readers) {
-				auto sources = info.data[r].parameters[1];
-				if (sources.size() != 1) return;
-				if (info.data[r].everything[compare.num] != compareval) return;
+				auto& sources = info.data[r].parameters[1];
+				bool has_us = false;
 				for (auto source : sources) {
-					if (!std::holds_alternative<statement *>(source)) return;
-					if (std::get<statement *>(source) != s) return;
+					statement ** src_stmt = std::get_if<statement *>(&source);
+					if (!src_stmt) return;
+					if (*src_stmt == s) {
+						has_us = true;
+						continue;
+					}
+					if (reachable_before(s, *src_stmt, r)) return;
 				}
-				for (auto &potential_block : compareval) {
-					if (!std::holds_alternative<statement *>(potential_block)) return;
-					auto potential_bstmt = std::get<statement *>(potential_block);
-					if (potential_bstmt == s) continue;
-					if (reachable_before(s, potential_bstmt, r)) return;
+				if (!has_us)
+					return;
+				auto& clobberers = info.data[r].everything[compare.num];
+				for (auto clobber : clobberers) {
+					if (std::holds_alternative<parameter_source>(clobber)) continue;
+					if (std::holds_alternative<undefined_source>(clobber)) return;
+					statement * clobber_stmt = std::get<statement *>(clobber);
+					if (clobber_stmt == s || clobber_stmt == r) continue;
+					if (reachable_before(s, clobber_stmt, r)) {
+						return;
+					}
 				}
 			}
+
 
 			// Alright. We are good to go.
 			DUMP_T std::cout << "copy elision (type 2, write) " << reg.num << "->" << compare.num << std::endl;
@@ -805,10 +813,10 @@ int tacoptimizecontext::optimize_rename() {
 			if (!ai_reg(writer->lhs())) continue; // Not a register write command
 			// Alright, now lets make a copy of a few things
 			auto &lore = info.data[writer];
-			std::list<statement *> to_investigate;
+			std::deque<statement *> to_investigate;
 			std::set<source_type>  validated_sources;
 			std::set<statement *>  checkable{};
-			std::list<int>          consider{};
+			std::deque<int>          consider{};
 			for (auto i = optimizing->num_params; i < writer->lhs().num; ++i) {
 				consider.push_back(i);
 			}
@@ -887,9 +895,10 @@ int tacoptimizecontext::optimize_rename() {
 											return std::all_of(checkable.begin(), checkable.end(), [&](auto &beginning){
 													const auto stmt_read = *std::get_if<statement *>(&reader);
 													if (si_addrof(*stmt_read)) return false;
+													if (!reachable(beginning, stmt_read)) return true;
 													// Can we get to the source before we get to the reader starting at where we want to clobber this register?
-													if (reachable_before(beginning, std::get<statement *>(c_source), stmt_read)) return true;
-													return false;
+													if (reachable_before(std::get<statement *>(c_source), beginning, stmt_read)) return false;
+													return true;
 											});
 									});
 								}
